@@ -34,7 +34,7 @@ beforeAll(() => {
     `).run();
   }
 
-  // Ensure quiz 1 exists for fullstack tests
+  // Ensure quiz 1 exists with 5 questions for test consistency
   const quizCheck = db.prepare("SELECT count(*) as count FROM quizzes WHERE id=1").get() as { count: number };
   if (quizCheck.count === 0) {
     db.prepare(`
@@ -45,7 +45,10 @@ beforeAll(() => {
     db.prepare(`
       INSERT INTO quiz_questions (id, quizId, questionAr, questionEn, optionsJson, correctOptionIndex, explanationAr, difficulty, "order")
       VALUES (1, 1, 'سؤال 1', 'Q1', '["A","B","C","D"]', 2, 'شرح', 'beginner', 1),
-             (2, 1, 'سؤال 2', 'Q2', '["A","B","C","D"]', 1, 'شرح', 'beginner', 2)
+             (2, 1, 'سؤال 2', 'Q2', '["A","B","C","D"]', 1, 'شرح', 'beginner', 2),
+             (15, 1, 'سؤال 3', 'Q3', '["A","B","C","D"]', 1, 'شرح', 'beginner', 3),
+             (16, 1, 'سؤال 4', 'Q4', '["A","B","C","D"]', 1, 'شرح', 'intermediate', 4),
+             (17, 1, 'سؤال 5', 'Q5', '["A","B","C","D"]', 0, 'شرح', 'intermediate', 5)
     `).run();
   }
 
