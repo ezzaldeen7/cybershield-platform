@@ -102,7 +102,11 @@ tmp/
 temp/
 
 # Database
+data/
 *.db
+*.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 

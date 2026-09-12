@@ -1,17 +1,59 @@
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import Database from "better-sqlite3";
 import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import * as schema from "../drizzle/schema";
+import { ENV } from "./_core/env";
+import fs from "fs";
+import path from "path";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+let _sqlite: Database.Database | null = null;
+let _db: BetterSQLite3Database<typeof schema> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
+/**
+ * Returns the SQLite Drizzle database instance.
+ * Ensures data directory exists and SQLite WAL mode is enabled.
+ */
+export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | null> {
+  if (!_db) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
+      // Ensure directory exists
+      const dbDir = path.dirname(path.resolve(dbUrl));
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+      }
+
+      _sqlite = new Database(dbUrl);
+      _sqlite.pragma("journal_mode = WAL");
+      _sqlite.pragma("foreign_keys = ON");
+      _db = drizzle(_sqlite, { schema });
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+      console.warn("[Database] Failed to connect to SQLite:", error);
+      _db = null;
+    }
+  }
+  return _db;
+}
+
+/**
+ * Sync version of getDb for fast synchronous internal lookups if needed
+ */
+export function getDbSync(): BetterSQLite3Database<typeof schema> | null {
+  if (!_db) {
+    try {
+      const dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
+      const dbDir = path.dirname(path.resolve(dbUrl));
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+      }
+
+      _sqlite = new Database(dbUrl);
+      _sqlite.pragma("journal_mode = WAL");
+      _sqlite.pragma("foreign_keys = ON");
+      _db = drizzle(_sqlite, { schema });
+    } catch (error) {
+      console.warn("[Database] Failed to connect to SQLite (sync):", error);
       _db = null;
     }
   }
@@ -30,35 +72,36 @@ export async function upsertUser(user: Partial<InsertUser> & { openId?: string |
   }
 
   try {
-    const values: Record<string, unknown> = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
+    const existing = await db.select().from(users).where(eq(users.openId, user.openId)).limit(1);
 
-    if (user.name !== undefined) { values.name = user.name; updateSet.name = user.name; }
-    if (user.email !== undefined) { values.email = user.email; updateSet.email = user.email; }
-    if (user.passwordHash !== undefined) { values.passwordHash = user.passwordHash; updateSet.passwordHash = user.passwordHash; }
-    if (user.loginMethod !== undefined) { values.loginMethod = user.loginMethod; updateSet.loginMethod = user.loginMethod; }
-    if (user.lastSignedIn !== undefined) { values.lastSignedIn = user.lastSignedIn; updateSet.lastSignedIn = user.lastSignedIn; }
+    const updateSet: Record<string, unknown> = {};
+    if (user.name !== undefined) updateSet.name = user.name;
+    if (user.email !== undefined) updateSet.email = user.email;
+    if (user.passwordHash !== undefined) updateSet.passwordHash = user.passwordHash;
+    if (user.loginMethod !== undefined) updateSet.loginMethod = user.loginMethod;
     if (user.role !== undefined) {
-      values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      updateSet.role = "admin";
     }
+    updateSet.lastSignedIn = new Date();
+    updateSet.updatedAt = new Date();
 
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
+    if (existing.length > 0) {
+      await db.update(users).set(updateSet).where(eq(users.openId, user.openId));
+    } else {
+      await db.insert(users).values({
+        openId: user.openId,
+        email: user.email,
+        name: user.name,
+        passwordHash: user.passwordHash,
+        loginMethod: user.loginMethod || "local",
+        role: (updateSet.role as string) || "user",
+        lastSignedIn: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
     }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values as InsertUser).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -73,8 +116,5 @@ export async function getUserByOpenId(openId: string) {
   }
 
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
   return result.length > 0 ? result[0] : undefined;
 }
-
-// TODO: add feature queries here as your schema grows.

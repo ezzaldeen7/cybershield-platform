@@ -31,8 +31,19 @@ export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
+    if (!ctx.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
+
+    if (ctx.user.role !== 'admin') {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    }
+
+    if (ctx.user.mustChangePassword) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "يجب تغيير كلمة المرور المؤقتة أولاً قبل الوصول إلى لوحة تحكم المشرف",
+      });
     }
 
     return next({

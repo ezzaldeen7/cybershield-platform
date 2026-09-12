@@ -23,13 +23,15 @@ export function getClientIp(req: Request): string {
  * Security Headers Middleware
  */
 export function securityHeadersMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // HSTS - Force HTTPS for 1 year
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // HSTS - Force HTTPS for 1 year only when served over HTTPS
+  if (req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
 
   // CSP - Content Security Policy
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: http: https:;"
   );
 
   // X-Frame-Options - Prevent clickjacking

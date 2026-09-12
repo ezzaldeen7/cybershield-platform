@@ -116,6 +116,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
+      better-sqlite3:
+        specifier: ^13.0.3
+        version: 13.0.3
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -136,7 +139,7 @@ importers:
         version: 17.4.2
       drizzle-orm:
         specifier: ^0.44.5
-        version: 0.44.7(mysql2@3.24.4(@types/node@24.13.4))
+        version: 0.44.7(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3)(mysql2@3.24.4(@types/node@24.13.4))
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.3.0)
@@ -219,6 +222,9 @@ importers:
       '@types/bcryptjs':
         specifier: ^3.0.0
         version: 3.0.0
+      '@types/better-sqlite3':
+        specifier: ^9.6.0
+        version: 9.6.0
       '@types/express':
         specifier: 4.17.21
         version: 4.17.21
@@ -2109,6 +2115,9 @@ packages:
     resolution: {integrity: sha512-WRZOuCuaz8UcZZE4R5HXTco2goQSI2XxjGY3hbM/xDvwmqFWd4ivooImsMx65OKM6CtNKbnZ5YL+YwAwK7c1dg==}
     deprecated: This is a stub types definition. bcryptjs provides its own type definitions, so you do not need this installed.
 
+  '@types/better-sqlite3@9.6.0':
+    resolution: {integrity: sha512-ZEEwBSgMu7GYJOynoagg5X9JbxfL6dTJDsgViJIqh67jV44kyOr9RXfmFjLK5rzC4MWssP06t9hu/JwGDnUbCg==}
+
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
 
@@ -2367,6 +2376,10 @@ packages:
   bcryptjs@3.0.3:
     resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
     hasBin: true
+
+  better-sqlite3@13.0.3:
+    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
+    engines: {node: '>=22'}
 
   body-parser@1.20.8:
     resolution: {integrity: sha512-JNcyFQ64OiijEkPzUBTCe+hyPXUD/3LEldGQ6iF5LR1w00mx9o7xtDWHXBY2iItjdCFGoilOLNQbH943ut7pHA==}
@@ -3559,6 +3572,10 @@ packages:
     peerDependencies:
       react: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
       react-dom: ^16.8 || ^17 || ^18 || ^19 || ^19.0.0-rc
+
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   node-releases@2.0.55:
     resolution: {integrity: sha512-mIrE/Cw9y+9Au6dS5vDKDhQza9YvG6w+ZrS6X+ZzA7yFW/soAeaups4Qzn1bL6g5FVy8WtP79+0j82oPIbqRjQ==}
@@ -5839,6 +5856,10 @@ snapshots:
     dependencies:
       bcryptjs: 3.0.3
 
+  '@types/better-sqlite3@9.6.0':
+    dependencies:
+      '@types/node': 24.13.4
+
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
@@ -6147,6 +6168,10 @@ snapshots:
   baseline-browser-mapping@2.11.22: {}
 
   bcryptjs@3.0.3: {}
+
+  better-sqlite3@13.0.3:
+    dependencies:
+      node-addon-api: 8.9.2
 
   body-parser@1.20.8:
     dependencies:
@@ -6515,8 +6540,10 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.13
 
-  drizzle-orm@0.44.7(mysql2@3.24.4(@types/node@24.13.4)):
+  drizzle-orm@0.44.7(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3)(mysql2@3.24.4(@types/node@24.13.4)):
     optionalDependencies:
+      '@types/better-sqlite3': 9.6.0
+      better-sqlite3: 13.0.3
       mysql2: 3.24.4(@types/node@24.13.4)
 
   dunder-proto@1.0.1:
@@ -7610,6 +7637,8 @@ snapshots:
     dependencies:
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
+
+  node-addon-api@8.9.2: {}
 
   node-releases@2.0.55: {}
 

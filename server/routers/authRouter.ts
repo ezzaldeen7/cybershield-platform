@@ -2,10 +2,11 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
-import { registerLocalUser, loginLocalUser, revokeSession, hashPassword, verifyPassword, isStrongPassword } from "../services/authService";
+import { registerLocalUser, loginLocalUser, revokeSession, createSession, hashPassword, verifyPassword, isStrongPassword } from "../services/authService";
 import { getClientIp } from "../_core/middleware";
+import { checkLoginRateLimit, rateLimiter } from "../_core/rateLimit";
 import { getDb } from "../db";
-import { users, auditLogs } from "../../drizzle/schema";
+import { users, sessions, auditLogs } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -52,6 +53,7 @@ export const authRouter = router({
             name: user.name,
             email: user.email,
             role: user.role,
+            mustChangePassword: user.mustChangePassword,
           },
         };
       } catch (error: any) {
@@ -76,6 +78,15 @@ export const authRouter = router({
       const ipAddress = getClientIp(ctx.req);
       const userAgent = (ctx.req.headers["user-agent"] as string) || "Unknown";
 
+      // Rate limit check: max 5 failed attempts per 15 minutes per email/IP
+      const isAllowed = checkLoginRateLimit(input.email, ipAddress);
+      if (!isAllowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "تم تجاوز الحد المسموح به لمحاولات الدخول (5 محاولات). يرجى الانتظار 15 دقيقة قبل المحاولة مرة أخرى.",
+        });
+      }
+
       try {
         const { user, token } = await loginLocalUser({
           email: input.email,
@@ -83,6 +94,9 @@ export const authRouter = router({
           ipAddress,
           userAgent,
         });
+
+        // Reset rate limiter on successful login
+        rateLimiter.reset(`login:${input.email.trim().toLowerCase()}:${ipAddress}`);
 
         // Set session cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -95,6 +109,7 @@ export const authRouter = router({
             name: user.name,
             email: user.email,
             role: user.role,
+            mustChangePassword: user.mustChangePassword,
           },
         };
       } catch (error: any) {
@@ -157,13 +172,33 @@ export const authRouter = router({
       }
 
       const newPasswordHash = await hashPassword(input.newPassword);
-      await db.update(users).set({ passwordHash: newPasswordHash }).where(eq(users.id, ctx.user.id));
+      await db
+        .update(users)
+        .set({
+          passwordHash: newPasswordHash,
+          mustChangePassword: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, ctx.user.id));
+
+      // Revoke all previous sessions of this user across all devices for security
+      await db.delete(sessions).where(eq(sessions.userId, ctx.user.id));
+
+      // Create a fresh session for the current client
+      const freshToken = await createSession(
+        ctx.user.id,
+        getClientIp(ctx.req),
+        (ctx.req.headers["user-agent"] as string) || "Unknown"
+      );
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, freshToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       await db.insert(auditLogs).values({
         userId: ctx.user.id,
         action: "PASSWORD_CHANGE",
         eventType: "AUTH_PASSWORD_CHANGE",
         severity: "info",
+        detailsJson: JSON.stringify({ email: ctx.user.email }),
         ipAddress: getClientIp(ctx.req),
         userAgent: (ctx.req.headers["user-agent"] as string) || "Unknown",
       });

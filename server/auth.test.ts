@@ -16,8 +16,9 @@ describe("Password Hashing & Strength Controls", () => {
 
   it("validates strong passwords correctly", () => {
     expect(isStrongPassword("12345").valid).toBe(false);
-    expect(isStrongPassword("short").valid).toBe(false);
-    expect(isStrongPassword("123456").valid).toBe(true);
+    expect(isStrongPassword("123456").valid).toBe(false); // 6 chars is rejected
+    expect(isStrongPassword("12345678").valid).toBe(false); // common weak password in blacklist is rejected
+    expect(isStrongPassword("Pass#Secure2026").valid).toBe(true); // 8+ chars strong pass is valid
     expect(isStrongPassword("ValidPass123").valid).toBe(true);
   });
 });
@@ -50,6 +51,7 @@ describe("RBAC Access Controls", () => {
     name: "Regular User",
     loginMethod: "local",
     role: "user",
+    mustChangePassword: false,
     isActive: true,
     lastIpAddress: "127.0.0.1",
     createdAt: new Date(),
@@ -93,4 +95,61 @@ describe("RBAC Access Controls", () => {
     expect(clearedCookies).toHaveLength(1);
     expect(clearedCookies[0].name).toBe(COOKIE_NAME);
   });
+
+  it("enforces RBAC: forbids regular users from accessing admin routes", async () => {
+    const { ctx } = createTestContext(normalUser);
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.admin.stats()).rejects.toThrow();
+  });
+
+  it("enforces RBAC: allows admin users to access admin routes", async () => {
+    const { ctx } = createTestContext(adminUser);
+    const caller = appRouter.createCaller(ctx);
+    const stats = await caller.admin.stats();
+    expect(stats).toHaveProperty("totalUsers");
+  });
 });
+
+describe("Session Lifecycle & Token Hashing Security", () => {
+  it("generates session tokens and stores only SHA-256 hash in database", async () => {
+    const crypto = await import("crypto");
+    const { createSession, getUserBySessionToken, revokeSession } = await import("./services/authService");
+    const { getDb } = await import("./db");
+    const { users, sessions } = await import("../drizzle/schema");
+
+    const db = await getDb();
+    if (!db) return;
+
+    // Create a temporary test user in SQLite
+    const testEmail = `sec_test_${Date.now()}@cybershield.test`;
+    const [insertedUser] = await db.insert(users).values({
+      email: testEmail,
+      name: "Security Test User",
+      role: "user",
+      mustChangePassword: false,
+      isActive: true,
+    }).returning();
+
+    // 1. Create session
+    const rawToken = await createSession(insertedUser.id, "127.0.0.1", "Vitest-Agent");
+    expect(rawToken).toHaveLength(64); // 32 bytes hex = 64 chars
+
+    // 2. Verify tokenHash in SQLite matches SHA-256(rawToken)
+    const expectedHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const sessionRows = await db.select().from(sessions);
+    const sessionRecord = sessionRows.find((s) => s.userId === insertedUser.id);
+    expect(sessionRecord).toBeDefined();
+    expect(sessionRecord?.tokenHash).toBe(expectedHash);
+
+    // 3. Verify session authentication succeeds with valid token
+    const authenticatedUser = await getUserBySessionToken(rawToken);
+    expect(authenticatedUser).not.toBeNull();
+    expect(authenticatedUser?.id).toBe(insertedUser.id);
+
+    // 4. Verify logout revokes session
+    await revokeSession(rawToken);
+    const revokedCheck = await getUserBySessionToken(rawToken);
+    expect(revokedCheck).toBeNull();
+  });
+});
+

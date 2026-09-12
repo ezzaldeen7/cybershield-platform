@@ -340,6 +340,7 @@ function buildCronUser(
     passwordHash: null,
     loginMethod: "cron",
     role: "user",
+    mustChangePassword: false,
     isActive: true,
     lastIpAddress: null,
     createdAt: now,

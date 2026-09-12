@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { eq, and, gt, sql } from "drizzle-orm";
+import { eq, and, or, gt, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { users, sessions, awarenessScores, auditLogs, securityEvents, User } from "../../drizzle/schema";
 
@@ -33,12 +33,32 @@ export function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
+// Common weak passwords blacklist
+const COMMON_WEAK_PASSWORDS = new Set([
+  "12345678",
+  "123456789",
+  "password",
+  "password123",
+  "admin123",
+  "admin12345",
+  "admin@123",
+  "qwerty123",
+  "cybershield",
+  "cybershield123",
+  "p@ssword",
+  "welcome123",
+  "iloveyou",
+]);
+
 /**
- * Validate password strength (min 6 chars)
+ * Validate password strength (min 8 chars & not in common weak list)
  */
 export function isStrongPassword(password: string): { valid: boolean; reason?: string } {
-  if (!password || password.length < 6) {
-    return { valid: false, reason: "كلمة المرور يجب أن لا تقل عن 6 خانات" };
+  if (!password || password.length < 8) {
+    return { valid: false, reason: "كلمة المرور يجب أن لا تقل عن 8 خانات" };
+  }
+  if (COMMON_WEAK_PASSWORDS.has(password.toLowerCase().trim())) {
+    return { valid: false, reason: "كلمة المرور المدخلة شائعة وسهلة التخمين. يرجى اختيار كلمة مرور أكثر أماناً" };
   }
   return { valid: true };
 }
@@ -48,6 +68,7 @@ export function isStrongPassword(password: string): { valid: boolean; reason?: s
  */
 export async function createSession(userId: number, ipAddress?: string, userAgent?: string): Promise<string> {
   const sessionToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(sessionToken).digest("hex");
   const expiresAt = new Date(Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000);
 
   const db = await getDb();
@@ -55,6 +76,7 @@ export async function createSession(userId: number, ipAddress?: string, userAgen
     try {
       await db.insert(sessions).values({
         userId,
+        tokenHash,
         token: sessionToken,
         ipAddress: ipAddress || "127.0.0.1",
         userAgent: userAgent || "Unknown",
@@ -92,10 +114,11 @@ export async function getUserBySessionToken(token: string): Promise<User | null>
 
   try {
     const now = new Date();
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
     const sessionResult = await db
       .select()
       .from(sessions)
-      .where(and(eq(sessions.token, token), gt(sessions.expiresAt, now)))
+      .where(and(or(eq(sessions.tokenHash, tokenHash), eq(sessions.token, token)), gt(sessions.expiresAt, now)))
       .limit(1);
 
     if (sessionResult.length === 0) return null;
@@ -130,7 +153,8 @@ export async function revokeSession(token: string): Promise<boolean> {
   if (!db) return true;
 
   try {
-    await db.delete(sessions).where(eq(sessions.token, token));
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    await db.delete(sessions).where(or(eq(sessions.tokenHash, tokenHash), eq(sessions.token, token)));
     return true;
   } catch {
     return true;
@@ -160,7 +184,7 @@ export async function registerLocalUser(params: {
   }
 
   const passwordHash = await hashPassword(password);
-  const isTargetAdmin = normalizedEmail.includes("admin") || fallbackUsers.size === 0;
+  const isTargetAdmin = normalizedEmail === "admin@cybershield.sa";
   const assignedRole = isTargetAdmin ? "admin" : "user";
 
   const db = await getDb();
@@ -172,9 +196,7 @@ export async function registerLocalUser(params: {
         throw new Error("البريد الإلكتروني مستخدم بالفعل في حساب آخر");
       }
 
-      const totalUsersRes = await db.select({ count: sql<number>`count(*)` }).from(users);
-      const totalUsers = Number(totalUsersRes[0]?.count || 0);
-      const finalRole = normalizedEmail.includes("admin") || totalUsers === 0 ? "admin" : "user";
+      const finalRole = normalizedEmail === "admin@cybershield.sa" ? "admin" : "user";
 
       await db.insert(users).values({
         name: name.trim(),
@@ -233,6 +255,7 @@ export async function registerLocalUser(params: {
     name: name.trim(),
     loginMethod: "local",
     role: assignedRole,
+    mustChangePassword: false,
     isActive: true,
     lastIpAddress: ipAddress || "127.0.0.1",
     createdAt: new Date(),
@@ -286,6 +309,18 @@ export async function loginLocalUser(params: {
             lastIpAddress: ipAddress || "127.0.0.1",
           })
           .where(eq(users.id, user.id));
+
+        try {
+          await db.insert(auditLogs).values({
+            userId: user.id,
+            action: "USER_LOGIN",
+            eventType: "AUTH_LOGIN",
+            severity: "info",
+            detailsJson: JSON.stringify({ email: normalizedEmail, loginMethod: "local" }),
+            ipAddress: ipAddress || "127.0.0.1",
+            userAgent: userAgent || "Unknown",
+          });
+        } catch {}
 
         const token = await createSession(user.id, ipAddress, userAgent);
         return { user, token };
