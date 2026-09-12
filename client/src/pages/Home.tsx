@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { AuthModal } from "@/components/AuthModal";
+import { LearningPathView } from "@/components/LearningPathView";
 import { toast } from "sonner";
 import {
   Activity,
@@ -96,7 +97,12 @@ export default function Home() {
           <div className="mx-auto max-w-[1440px] p-5 lg:p-10">
             {active === "overview" && <Overview setActive={setActive} />}
             {active === "analyzer" && <AnalyzerView />}
-            {active === "lessons" && <LessonsView />}
+            {active === "lessons" && (
+              <LessonsView
+                onOpenAuth={() => setAuthModalOpen(true)}
+                onNavigateToQuiz={() => setActive("quiz")}
+              />
+            )}
             {active === "quiz" && <QuizView />}
             {active === "admin" && <AdminView />}
           </div>
@@ -376,62 +382,14 @@ function AnalyzerView() {
   );
 }
 
-function LessonsView() {
-  const lessonsQuery = trpc.content.list.useQuery({});
-  const lessonsList = lessonsQuery.data?.items || [];
-  const completeMutation = trpc.learning.completeLesson.useMutation({
-    onSuccess: () => {
-      toast.success("تم تسجيل إكمال الدرس وتحديث درجات الوعي في السيرفر!");
-    },
-  });
-
-  return (
-    <div className="space-y-7 animate-in fade-in duration-500">
-      <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
-          <BookOpen size={23} />
-        </div>
-        <div>
-          <p className="text-xs font-bold tracking-wide text-cyan-300">المحتوى التعليمي الديناميكي</p>
-          <h1 className="mt-1 text-3xl font-black text-white">مسار التوعية الأكاديمي</h1>
-          <p className="mt-2 text-sm text-slate-400">دروس تفاعلية محملة مباشرة من قاعدة البيانات.</p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {lessonsList.map((lesson) => (
-          <Card key={lesson.id} className="group border-white/10 bg-[#101a2d] text-white">
-            <CardContent className="flex gap-5 p-6">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
-                <BookOpen size={25} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="border-white/10 text-[10px] text-slate-400">
-                    {lesson.difficulty}
-                  </Badge>
-                  <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                    <Clock3 size={12} />
-                    {lesson.durationMinutes} دقائق
-                  </span>
-                </div>
-                <h2 className="mt-3 text-base font-black">{lesson.titleAr}</h2>
-                <p className="mt-2 text-xs leading-6 text-slate-400">{lesson.summaryAr}</p>
-                <Button
-                  onClick={() => completeMutation.mutate({ lessonId: lesson.id })}
-                  disabled={completeMutation.isPending}
-                  variant="ghost"
-                  className="mt-3 -mr-3 gap-1 px-3 text-xs text-cyan-300 hover:bg-cyan-300/10 hover:text-cyan-200"
-                >
-                  تسجيل إكمال الدرس <Check size={14} />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+function LessonsView({
+  onOpenAuth,
+  onNavigateToQuiz,
+}: {
+  onOpenAuth: () => void;
+  onNavigateToQuiz: () => void;
+}) {
+  return <LearningPathView onOpenAuth={onOpenAuth} onNavigateToQuiz={onNavigateToQuiz} />;
 }
 
 function QuizView() {

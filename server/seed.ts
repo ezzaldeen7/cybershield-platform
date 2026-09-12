@@ -56,62 +56,17 @@ export async function seedDatabase() {
     }
   }
 
-  // 3. Educational Lessons
-  const lessonsData = [
-    {
-      title: "How to Detect Phishing Messages",
-      titleAr: "كيف تكتشف رسائل التصيد والاحتيال؟",
-      slug: "how-to-detect-phishing",
-      summaryAr: "تعلم قراءة الرسائل غير المعتادة وكشف أساليب الضغط والاستعجال وانتحال الهوية.",
-      content: "Phishing content...",
-      contentAr: "التصيد الإلكتروني هو محاولة الحصول على معلوماتك الحساسة عبر رسائل مزيفة...",
-      difficulty: "beginner",
-      durationMinutes: 5,
-      order: 1,
-    },
-    {
-      title: "Inspect Links Before Clicking",
-      titleAr: "اقرأ الرابط قبل أن تنقر: التحليل التركيبي للروابط",
-      slug: "safe-link-inspection",
-      summaryAr: "افهم أجزاء الرابط: البروتوكول، النطاق الأساسي، النطاق الفرعي، ومسار الصفحة.",
-      content: "Link inspection content...",
-      contentAr: "الرابط يحتوي على مكونات تكشف وجهته الحقيقية قبل فتحه...",
-      difficulty: "beginner",
-      durationMinutes: 6,
-      order: 2,
-    },
-    {
-      title: "Account Protection and Multi-Factor Authentication",
-      titleAr: "حماية الحسابات والمصادقة متعددة العوامل",
-      slug: "account-protection-mfa",
-      summaryAr: "لماذا تعد كلمات المرور وحدها غير كافية؟ وكيف تعمل تطبيقات المصادقة الثنائية؟",
-      content: "MFA and account protection...",
-      contentAr: "المصادقة متعددة العوامل توفر طبقة أمان إضافية حتى لو تسربت كلمة المرور...",
-      difficulty: "intermediate",
-      durationMinutes: 7,
-      order: 3,
-    },
-    {
-      title: "Malware & Safe Attachment Handling",
-      titleAr: "الملفات والمرفقات المشبوهة والبرمجيات الخبيثة",
-      slug: "malware-safe-attachments",
-      summaryAr: "كيف تصل الفيروسات وبرامج الفدية عبر المرفقات؟ وكيف تتعامل معها بأمان؟",
-      content: "Safe attachments handling...",
-      contentAr: "المرفقات التنفيذية أو التي تطلب تفعيل الماكرو تعد من أخطر نواقل الهجمات...",
-      difficulty: "intermediate",
-      durationMinutes: 6,
-      order: 4,
-    },
-  ];
+  // 3. Educational Lessons (7 Core Modules)
+  const { DEFAULT_LESSONS } = await import("./services/contentService");
 
-  for (const les of lessonsData) {
+  for (const les of DEFAULT_LESSONS) {
     const exists = await db.select().from(lessons).where(eq(lessons.slug, les.slug)).limit(1);
     if (exists.length === 0) {
       await db.insert(lessons).values({
         title: les.title,
         titleAr: les.titleAr,
         slug: les.slug,
-        summary: les.summaryAr,
+        summary: les.summary,
         summaryAr: les.summaryAr,
         content: les.content,
         contentAr: les.contentAr,
@@ -119,7 +74,25 @@ export async function seedDatabase() {
         durationMinutes: les.durationMinutes,
         order: les.order,
         status: "published",
+        learningObjectivesJson: les.learningObjectivesJson,
       });
+    } else {
+      await db
+        .update(lessons)
+        .set({
+          title: les.title,
+          titleAr: les.titleAr,
+          summary: les.summary,
+          summaryAr: les.summaryAr,
+          content: les.content,
+          contentAr: les.contentAr,
+          difficulty: les.difficulty as any,
+          durationMinutes: les.durationMinutes,
+          order: les.order,
+          status: "published",
+          learningObjectivesJson: les.learningObjectivesJson,
+        })
+        .where(eq(lessons.slug, les.slug));
     }
   }
 

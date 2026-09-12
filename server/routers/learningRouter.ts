@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
-import { getLessonProgress, markLessonCompleted, getUserLearningOverview } from "../services/learningService";
+import {
+  getLessonProgress,
+  markLessonCompleted,
+  getUserLearningOverview,
+  getLessonsWithProgress,
+} from "../services/learningService";
 
 export const learningRouter = router({
   /**
@@ -20,7 +25,23 @@ export const learningRouter = router({
     }),
 
   /**
-   * Record lesson completion
+   * List all lessons with user progress status (publicly accessible, progress attached if authenticated)
+   */
+  getLessonsWithProgress: publicProcedure
+    .input(
+      z
+        .object({
+          categoryId: z.number().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.user?.id;
+      return await getLessonsWithProgress({ userId, categoryId: input?.categoryId });
+    }),
+
+  /**
+   * Record lesson completion (Requires authentication)
    */
   completeLesson: protectedProcedure
     .input(z.object({ lessonId: z.number() }))

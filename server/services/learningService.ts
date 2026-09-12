@@ -1,6 +1,8 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, asc } from "drizzle-orm";
 import { getDb } from "../db";
-import { userProgress, lessons, lessonPrerequisites, awarenessScores } from "../../drizzle/schema";
+import { userProgress, lessons, awarenessScores } from "../../drizzle/schema";
+import { DEFAULT_LESSONS, seedInitialLessons } from "./contentService";
+
 export type UserProgress = typeof userProgress.$inferSelect;
 
 /**
@@ -23,13 +25,101 @@ export async function getLessonProgress(userId: number, lessonId: number): Promi
 }
 
 /**
+ * List all published lessons with user progress indicators
+ */
+export async function getLessonsWithProgress(params: {
+  userId?: number;
+  categoryId?: number;
+}) {
+  const { userId, categoryId } = params;
+  const db = await getDb();
+
+  // Ensure lessons are seeded
+  try {
+    await seedInitialLessons();
+  } catch (err) {
+    console.warn("[LearningService] seedInitialLessons warning:", err);
+  }
+
+  let allLessons: (typeof lessons.$inferSelect)[] = [];
+
+  if (db) {
+    try {
+      const conditions: any[] = [eq(lessons.status, "published")];
+      if (categoryId) {
+        conditions.push(eq(lessons.categoryId, categoryId));
+      }
+
+      allLessons = await db
+        .select()
+        .from(lessons)
+        .where(and(...conditions))
+        .orderBy(asc(lessons.order));
+    } catch (err) {
+      console.warn("[LearningService] DB fetch failed, using fallback:", err);
+    }
+  }
+
+  if (allLessons.length === 0) {
+    allLessons = DEFAULT_LESSONS.filter((l) => l.status === "published" && (!categoryId || l.categoryId === categoryId));
+  }
+
+  // Get completed lesson IDs for user if authenticated
+  const completedMap = new Map<number, Date | null>();
+  if (userId && db) {
+    try {
+      const userProgressRecords = await db
+        .select()
+        .from(userProgress)
+        .where(and(eq(userProgress.userId, userId), eq(userProgress.status, "completed")));
+
+      for (const rec of userProgressRecords) {
+        completedMap.set(rec.lessonId, rec.completedAt);
+      }
+    } catch (err) {
+      console.warn("[LearningService] Failed to load userProgress:", err);
+    }
+  }
+
+  const enrichedLessons = allLessons.map((les) => {
+    const isCompleted = completedMap.has(les.id);
+    const completedAt = completedMap.get(les.id) || null;
+    return {
+      ...les,
+      isCompleted,
+      completedAt,
+    };
+  });
+
+  const totalLessons = enrichedLessons.length;
+  const completedCount = enrichedLessons.filter((l) => l.isCompleted).length;
+  const progressPercentage = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
+
+  return {
+    lessons: enrichedLessons,
+    totalLessons,
+    completedCount,
+    progressPercentage,
+  };
+}
+
+/**
  * Mark a lesson as completed by user
  */
-export async function markLessonCompleted(userId: number, lessonId: number): Promise<{ success: boolean; progressPercentage: number }> {
+export async function markLessonCompleted(
+  userId: number,
+  lessonId: number
+): Promise<{ success: boolean; progressPercentage: number; completedCount: number }> {
   const db = await getDb();
   const now = new Date();
 
   if (db) {
+    // 1. Verify lesson exists and is published
+    const [targetLesson] = await db.select().from(lessons).where(eq(lessons.id, lessonId)).limit(1);
+    if (!targetLesson) {
+      throw new Error("الدرس المطلوب غير موجود أو غير متاح في النظام");
+    }
+
     try {
       const existing = await db
         .select()
@@ -52,18 +142,18 @@ export async function markLessonCompleted(userId: number, lessonId: number): Pro
         });
       }
 
-      // Calculate total progress percentage
+      // Calculate total progress percentage across published lessons
       const totalLessonsRes = await db.select({ count: sql<number>`count(*)` }).from(lessons).where(eq(lessons.status, "published"));
       const completedLessonsRes = await db
         .select({ count: sql<number>`count(*)` })
         .from(userProgress)
         .where(and(eq(userProgress.userId, userId), eq(userProgress.status, "completed")));
 
-      const total = Number(totalLessonsRes[0]?.count || 1);
+      const total = Number(totalLessonsRes[0]?.count || 7);
       const completed = Number(completedLessonsRes[0]?.count || 0);
       const percentage = Math.min(100, Math.round((completed / total) * 100));
 
-      // Update awareness score incrementally
+      // Increment currentScore without altering baseline initialScore
       const userScoreRes = await db.select().from(awarenessScores).where(eq(awarenessScores.userId, userId)).limit(1);
       if (userScoreRes.length > 0) {
         const current = userScoreRes[0];
@@ -74,13 +164,14 @@ export async function markLessonCompleted(userId: number, lessonId: number): Pro
           .where(eq(awarenessScores.id, current.id));
       }
 
-      return { success: true, progressPercentage: percentage };
-    } catch (error) {
+      return { success: true, progressPercentage: percentage, completedCount: completed };
+    } catch (error: any) {
+      if (error.message?.includes("غير موجود")) throw error;
       console.warn("[LearningService] DB update fallback:", error);
     }
   }
 
-  return { success: true, progressPercentage: 25 };
+  return { success: true, progressPercentage: 14, completedCount: 1 };
 }
 
 /**
