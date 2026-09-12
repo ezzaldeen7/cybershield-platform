@@ -96,6 +96,10 @@ export async function seedDatabase() {
     }
   }
 
+  // 4. Educational Quizzes & Questions
+  const { seedInitialQuizzes } = await import("./services/quizService");
+  await seedInitialQuizzes();
+
   console.log("[Seed] Database seeding completed successfully!");
 }
 

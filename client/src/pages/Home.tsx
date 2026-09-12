@@ -422,19 +422,26 @@ function QuizView() {
 
   if (result) {
     return (
-      <div className="mx-auto max-w-2xl animate-in fade-in duration-500">
+      <div className="mx-auto max-w-3xl animate-in fade-in duration-500 space-y-6">
         <Card className="border-cyan-300/20 bg-[#101a2d] text-center text-white">
-          <CardContent className="p-8 sm:p-12">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-400/10 text-amber-300">
+          <CardContent className="p-8 sm:p-10">
+            <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${result.passed ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-400/10 text-amber-300"}`}>
               <Trophy size={38} />
             </div>
             <p className="mt-6 text-xs font-bold text-cyan-300">نتيجة الاختبار المسجلة بالسيرفر</p>
             <h1 className="mt-2 text-3xl font-black">
               {result.correctAnswers} / {result.totalQuestions} ({result.scorePercentage}%)
             </h1>
-            <p className="mx-auto mt-4 max-w-md text-sm leading-7 text-slate-400">
-              {result.passed ? "ممتاز! لديك أساس جيد لاكتشاف مؤشرات الخطر." : "راجع الدروس الموصى بها ثم أعد الاختبار لترسيخ المفاهيم."}
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-300">
+              {result.passed
+                ? "تهانينا! لقد اجتزت اختبار الدرس بنجاح واكتسبت نقاط الوعي الأمني."
+                : "لم تحقق نسبة الاجتياز المطلوبة (70%). ننصحك بمراجعة محتوى الدرس ثم إعادة الاختبار."}
             </p>
+            {result.isFirstPass && (
+              <p className="mt-2 text-xs font-bold text-emerald-400">
+                + 5 نقاط وعي أمني أضيفت إلى رصيدك لاجتيازك الاختبار للمرة الأولى!
+              </p>
+            )}
             <Button
               onClick={() => {
                 submitMutation.reset();
@@ -442,19 +449,41 @@ function QuizView() {
                 setSelectedAnswer(null);
                 setUserAnswers([]);
               }}
-              className="mt-8 gap-2 bg-cyan-400 font-bold text-[#081120] hover:bg-cyan-300"
+              className="mt-6 gap-2 bg-cyan-400 font-bold text-[#081120] hover:bg-cyan-300"
             >
               إعادة الاختبار
             </Button>
           </CardContent>
         </Card>
+
+        {/* Detailed Educational Feedback */}
+        <div className="space-y-4">
+          <h3 className="text-base font-bold text-white">المراجعة الأكاديمية للإجابات:</h3>
+          {result.results.map((r, idx) => (
+            <Card key={r.questionId} className={`border p-5 text-white ${r.isCorrect ? "border-emerald-500/30 bg-[#0c1e28]" : "border-rose-500/30 bg-[#22131a]"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-cyan-300">سؤال {idx + 1}: </span>
+                  <p className="mt-1 text-sm font-semibold">{r.questionAr}</p>
+                </div>
+                <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-bold ${r.isCorrect ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"}`}>
+                  {r.isCorrect ? "إجابة صحيحة" : "إجابة غير صحيحة"}
+                </span>
+              </div>
+              <div className="mt-3 rounded-lg border border-white/10 bg-[#081120] p-3 text-xs leading-6 text-slate-300">
+                <span className="font-bold text-cyan-200">الشرح التعليمي: </span>
+                {r.explanationAr}
+              </div>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (!currentQuestion) return <div className="p-10 text-center text-slate-400">جارٍ تحميل أسئلة الاختبار...</div>;
 
-  const options: string[] = JSON.parse(currentQuestion.optionsJson || "[]");
+  const options: string[] = currentQuestion.options || [];
 
   return (
     <div className="space-y-7 animate-in fade-in duration-500">
@@ -493,17 +522,10 @@ function QuizView() {
             ))}
           </div>
 
-          {selectedAnswer !== null && (
-            <div className="mt-6 rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-4 text-xs leading-6 text-slate-300">
-              <span className="font-bold text-cyan-200">الشرح الأمني: </span>
-              {currentQuestion.explanationAr}
-            </div>
-          )}
-
           <div className="mt-8 flex justify-end">
             {selectedAnswer !== null && (
               <Button onClick={handleNext} className="gap-2 bg-cyan-400 font-bold text-[#081120] hover:bg-cyan-300">
-                {quizIndex === questions.length - 1 ? "إرسال الاختبار للسيرفر" : "السؤال التالي"}
+                {quizIndex === questions.length - 1 ? "إرسال الاختبار والتقييم" : "السؤال التالي"}
                 <ChevronLeft size={16} />
               </Button>
             )}

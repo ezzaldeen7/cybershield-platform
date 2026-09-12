@@ -31,8 +31,8 @@ describe("Quiz Engine & Grading", () => {
       userId: 1,
       quizId: 1,
       answers: [
-        { questionId: 1, selectedOptionIndex: 2 }, // Correct
-        { questionId: 2, selectedOptionIndex: 2 }, // Correct
+        { questionId: 1, selectedOptionIndex: 2 }, // Correct (index 2)
+        { questionId: 2, selectedOptionIndex: 1 }, // Correct (index 1)
       ],
     });
 

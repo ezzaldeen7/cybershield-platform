@@ -1,16 +1,40 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
-import { getQuizQuestionsList, submitQuizAnswers } from "../services/quizService";
+import {
+  getQuizQuestionsList,
+  submitQuizAnswers,
+  getQuizByLessonOrId,
+  getUserQuizzesProgress,
+} from "../services/quizService";
 
 export const quizRouter = router({
   /**
-   * Get questions for a quiz
+   * Get quiz and sanitized questions by lesson ID
+   */
+  getByLessonId: publicProcedure
+    .input(z.object({ lessonId: z.number() }))
+    .query(async ({ input }) => {
+      const quiz = await getQuizByLessonOrId({ lessonId: input.lessonId });
+      const questions = await getQuizQuestionsList(quiz.id, true);
+      return { quiz, questions };
+    }),
+
+  /**
+   * Get questions for a quiz (sanitized options without exposing correct index)
    */
   getQuestions: publicProcedure
     .input(z.object({ quizId: z.number().optional() }))
     .query(async ({ input }) => {
-      return await getQuizQuestionsList(input.quizId || 1);
+      const quizId = input.quizId || 1;
+      return await getQuizQuestionsList(quizId, true);
     }),
+
+  /**
+   * Get overall quiz completion progress for user
+   */
+  getProgress: publicProcedure.query(async ({ ctx }) => {
+    return await getUserQuizzesProgress(ctx.user?.id);
+  }),
 
   /**
    * Submit quiz answers & get instant graded results with explanations

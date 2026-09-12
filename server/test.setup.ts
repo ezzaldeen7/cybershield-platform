@@ -34,5 +34,20 @@ beforeAll(() => {
     `).run();
   }
 
+  // Ensure quiz 1 exists for fullstack tests
+  const quizCheck = db.prepare("SELECT count(*) as count FROM quizzes WHERE id=1").get() as { count: number };
+  if (quizCheck.count === 0) {
+    db.prepare(`
+      INSERT INTO quizzes (id, titleAr, titleEn, passScorePercentage)
+      VALUES (1, 'اختبار الوحدة 1: كشف رسائل التصيد', 'Quiz 1', 70)
+    `).run();
+
+    db.prepare(`
+      INSERT INTO quiz_questions (id, quizId, questionAr, questionEn, optionsJson, correctOptionIndex, explanationAr, difficulty, "order")
+      VALUES (1, 1, 'سؤال 1', 'Q1', '["A","B","C","D"]', 2, 'شرح', 'beginner', 1),
+             (2, 1, 'سؤال 2', 'Q2', '["A","B","C","D"]', 1, 'شرح', 'beginner', 2)
+    `).run();
+  }
+
   db.close();
 });
