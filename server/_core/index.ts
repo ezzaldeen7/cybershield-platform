@@ -43,7 +43,7 @@ async function startServer() {
   // Security controls
   app.use(securityHeadersMiddleware);
   app.use(corsMiddleware);
-  app.use(rateLimitMiddleware);
+  app.use('/api', rateLimitMiddleware);
   app.use(requestLoggingMiddleware);
   registerStorageProxy(app);
   registerOAuthRoutes(app);
