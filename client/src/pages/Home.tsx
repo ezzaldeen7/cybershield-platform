@@ -5,6 +5,7 @@ import { AuthModal } from "@/components/AuthModal";
 import { AssessmentModal } from "@/components/AssessmentModal";
 import { LearningPathView } from "@/components/LearningPathView";
 import { QuizzesHubView } from "@/components/QuizzesHubView";
+import { AdminDashboardView } from "@/components/AdminDashboardView";
 import { WeaknessRecommendationsView } from "@/components/WeaknessRecommendationsView";
 import { toast } from "sonner";
 import {
@@ -725,88 +726,5 @@ function LessonsView({
 
 
 function AdminView() {
-  const statsQuery = trpc.admin.stats.useQuery();
-  const usersQuery = trpc.admin.usersList.useQuery({});
-  const auditQuery = trpc.admin.auditLogs.useQuery({});
-  const utils = trpc.useUtils();
-
-  const roleMutation = trpc.admin.updateUserRole.useMutation({
-    onSuccess: () => {
-      toast.success("تم تحديث دور المستخدم بنجاح");
-      utils.admin.usersList.invalidate();
-    },
-  });
-
-  const stats = statsQuery.data || {
-    totalUsers: 1,
-    publishedLessons: 4,
-    quizAttempts: 0,
-    avgAwarenessScore: 70,
-    securityEventsCount: 0,
-  };
-
-  return (
-    <div className="space-y-7 animate-in fade-in duration-500">
-      <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
-          <ShieldAlert size={23} />
-        </div>
-        <div>
-          <p className="text-xs font-bold tracking-wide text-cyan-300">لوحة الإدارة والتحكم (Admin Dashboard)</p>
-          <h1 className="mt-1 text-3xl font-black text-white">مراقبة النظام والمستخدمين والأنشطة الأمنية</h1>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={Users} label="إجمالي المستخدمين المسجلين" value={String(stats.totalUsers)} note="حسابات محققة" accent="cyan" />
-        <StatCard icon={BookOpen} label="الدروس التعليمية المنشورة" value={String(stats.publishedLessons)} note="متاحة للمتعلمين" accent="violet" />
-        <StatCard icon={ClipboardCheck} label="محاولات الاختبارات" value={String(stats.quizAttempts)} note="تم تقييمها بالسيرفر" accent="amber" />
-        <StatCard icon={ShieldCheck} label="متوسط الوعي العام" value={`${stats.avgAwarenessScore}%`} note="حسب إحصائيات النظام" accent="emerald" />
-      </div>
-
-      <Card className="border-white/10 bg-[#101a2d] text-white">
-        <CardHeader>
-          <CardTitle className="text-base font-bold">إدارة المستخدمين والأدوار (User & RBAC Management)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {(usersQuery.data || []).map((u) => (
-              <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/8 bg-[#0a1424] p-4 text-xs">
-                <div>
-                  <p className="font-bold text-slate-100">{u.name || "مستخدم"}</p>
-                  <p className="mt-1 text-slate-400">{u.email}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-cyan-300/30 bg-cyan-400/10 text-cyan-200">
-                    الدور الحالي: {u.role}
-                  </Badge>
-
-                  {u.role !== "admin" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => roleMutation.mutate({ userId: u.id, role: "admin" })}
-                      className="border-white/15 text-xs hover:bg-white/10"
-                    >
-                      ترقية إلى Admin
-                    </Button>
-                  )}
-                  {u.role !== "instructor" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => roleMutation.mutate({ userId: u.id, role: "instructor" })}
-                      className="border-white/15 text-xs hover:bg-white/10"
-                    >
-                      ترقية إلى Instructor
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <AdminDashboardView />;
 }
