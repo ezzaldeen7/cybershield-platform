@@ -14,9 +14,9 @@ export const SEVEN_LESSON_QUIZZES = [
   { id: 2, lessonId: 2, titleAr: "اختبار الوحدة 2: فحص وتحليل الروابط المشبوهة", titleEn: "Quiz 2: Safe Link Inspection", passScorePercentage: 70 },
   { id: 3, lessonId: 3, titleAr: "اختبار الوحدة 3: حماية الحسابات والمصادقة متعددة العوامل", titleEn: "Quiz 3: Account & MFA Security", passScorePercentage: 70 },
   { id: 4, lessonId: 4, titleAr: "اختبار الوحدة 4: التعامل الآمن مع المرفقات والبرمجيات الخبيثة", titleEn: "Quiz 4: Safe Attachments & Malware", passScorePercentage: 70 },
-  { id: 5, lessonId: 5, titleAr: "اختبار الوحدة 5: حماية البيانات والنسخ الاحتياطي ومكافحة برامج الفدية", titleEn: "Quiz 5: Data Protection & Ransomware", passScorePercentage: 70 },
-  { id: 6, lessonId: 6, titleAr: "اختبار الوحدة 6: الامان في الشبكات العامة والواي فاي", titleEn: "Quiz 6: Public Wi-Fi Security", passScorePercentage: 70 },
-  { id: 7, lessonId: 7, titleAr: "اختبار الوحدة 7: اجراءات الاستجابة والابلاغ عند التعرض لاختراق", titleEn: "Quiz 7: Incident Response & Reporting", passScorePercentage: 70 },
+  { id: 5, lessonId: 6, titleAr: "اختبار الوحدة 5: حماية البيانات والنسخ الاحتياطي ومكافحة برامج الفدية", titleEn: "Quiz 5: Data Protection & Ransomware", passScorePercentage: 70 },
+  { id: 6, lessonId: 7, titleAr: "اختبار الوحدة 6: الامان في الشبكات العامة والواي فاي", titleEn: "Quiz 6: Public Wi-Fi Security", passScorePercentage: 70 },
+  { id: 7, lessonId: 8, titleAr: "اختبار الوحدة 7: اجراءات الاستجابة والابلاغ عند التعرض لاختراق", titleEn: "Quiz 7: Incident Response & Reporting", passScorePercentage: 70 },
 ];
 
 /**
@@ -112,8 +112,7 @@ export async function seedInitialQuizzes() {
 
   try {
     for (const qz of SEVEN_LESSON_QUIZZES) {
-      const [les] = await db.select().from(lessons).where(eq(lessons.order, qz.id)).limit(1);
-      const actualLessonId = les?.id || null;
+      const actualLessonId = qz.lessonId;
 
       const existing = await db.select().from(quizzes).where(eq(quizzes.id, qz.id)).limit(1);
       if (existing.length === 0) {
@@ -371,6 +370,16 @@ export async function submitQuizAnswers(params: {
   return { totalQuestions, correctAnswers: correctCount, scorePercentage, passed, isFirstPass, results };
 }
 
+const LESSON_METADATA: Record<number, { titleAr: string; slug: string }> = {
+  1: { titleAr: "كيف تكتشف رسائل التصيد والاحتيال؟", slug: "how-to-detect-phishing" },
+  2: { titleAr: "اقرأ الرابط قبل أن تنقر: التحليل التركيبي للروابط", slug: "safe-link-inspection" },
+  3: { titleAr: "حماية الحسابات والمصادقة متعددة العوامل (MFA)", slug: "account-protection-mfa" },
+  4: { titleAr: "التعامل الآمن مع المرفقات والبرمجيات الخبيثة", slug: "attachments-malware-awareness" },
+  6: { titleAr: "حماية البيانات والنسخ الاحتياطي ومكافحة برامج الفدية", slug: "data-protection-backup" },
+  7: { titleAr: "الأمان في الشبكات العامة والواي فاي المجاني", slug: "public-wifi-network-security" },
+  8: { titleAr: "إجراءات الاستجابة والإبلاغ عند التعرض لاختراق", slug: "incident-reporting-response" },
+};
+
 /**
  * Get user quiz status across all 7 lessons
  */
@@ -382,6 +391,8 @@ export async function getUserQuizzesProgress(userId?: number) {
     quizId: qz.id,
     lessonId: qz.lessonId,
     titleAr: qz.titleAr,
+    lessonTitleAr: LESSON_METADATA[qz.lessonId]?.titleAr || "",
+    lessonSlug: LESSON_METADATA[qz.lessonId]?.slug || "",
     passScorePercentage: qz.passScorePercentage,
     hasAttempted: false,
     isPassed: false,
@@ -401,7 +412,7 @@ export async function getUserQuizzesProgress(userId?: number) {
         item.hasAttempted = true;
         item.attemptsCount = attempts.length;
         item.bestScore = Math.max(...attempts.map((a) => a.scorePercentage));
-        item.isPassed = attempts.some((a) => a.passed);
+        item.isPassed = attempts.some((a) => a.passed || a.scorePercentage >= item.passScorePercentage);
       }
     }
   } catch (err) {

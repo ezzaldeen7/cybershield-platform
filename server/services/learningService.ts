@@ -2,6 +2,7 @@ import { eq, and, sql, asc } from "drizzle-orm";
 import { getDb } from "../db";
 import { userProgress, lessons, awarenessScores } from "../../drizzle/schema";
 import { DEFAULT_LESSONS, seedInitialLessons } from "./contentService";
+import { getUserAssessmentStatus } from "./assessmentService";
 
 export type UserProgress = typeof userProgress.$inferSelect;
 
@@ -142,26 +143,30 @@ export async function markLessonCompleted(
         });
       }
 
-      // Calculate total progress percentage across published lessons
-      const totalLessonsRes = await db.select({ count: sql<number>`count(*)` }).from(lessons).where(eq(lessons.status, "published"));
-      const completedLessonsRes = await db
-        .select({ count: sql<number>`count(*)` })
+      const isFirstCompletion = existing.length === 0;
+
+      // Calculate total progress percentage across 7 official curriculum lessons [1, 2, 3, 4, 6, 7, 8]
+      const completedLessons = await db
+        .select({ lessonId: userProgress.lessonId })
         .from(userProgress)
         .where(and(eq(userProgress.userId, userId), eq(userProgress.status, "completed")));
-
-      const total = Number(totalLessonsRes[0]?.count || 7);
-      const completed = Number(completedLessonsRes[0]?.count || 0);
+      const completedSet = new Set(completedLessons.map((l) => l.lessonId));
+      const officialIds = [1, 2, 3, 4, 6, 7, 8];
+      const completed = officialIds.filter((id) => completedSet.has(id)).length;
+      const total = 7;
       const percentage = Math.min(100, Math.round((completed / total) * 100));
 
-      // Increment currentScore without altering baseline initialScore
-      const userScoreRes = await db.select().from(awarenessScores).where(eq(awarenessScores.userId, userId)).limit(1);
-      if (userScoreRes.length > 0) {
-        const current = userScoreRes[0];
-        const newScore = Math.min(100, current.currentScore + 5);
-        await db
-          .update(awarenessScores)
-          .set({ currentScore: newScore, improvementDelta: newScore - current.initialScore })
-          .where(eq(awarenessScores.id, current.id));
+      // Increment currentScore only on first completion of this lesson without altering baseline initialScore
+      if (isFirstCompletion) {
+        const userScoreRes = await db.select().from(awarenessScores).where(eq(awarenessScores.userId, userId)).limit(1);
+        if (userScoreRes.length > 0) {
+          const current = userScoreRes[0];
+          const newScore = Math.min(100, current.currentScore + 5);
+          await db
+            .update(awarenessScores)
+            .set({ currentScore: newScore, improvementDelta: newScore - current.initialScore })
+            .where(eq(awarenessScores.id, current.id));
+        }
       }
 
       return { success: true, progressPercentage: percentage, completedCount: completed };
@@ -181,45 +186,71 @@ export async function getUserLearningOverview(userId: number) {
   const db = await getDb();
   if (!db) {
     return {
-      completedCount: 2,
-      totalLessons: 8,
-      progressPercentage: 25,
-      currentAwarenessScore: 65,
-      initialAwarenessScore: 40,
-      improvementDelta: 25,
+      completedCount: 0,
+      totalLessons: 7,
+      completedLessonsCount: 0,
+      passedQuizzesCount: 0,
+      totalQuizzes: 7,
+      passedScenariosCount: 0,
+      totalScenarios: 7,
+      progressPercentage: 0,
+      currentAwarenessScore: 0,
+      initialAwarenessScore: 0,
+      improvementDelta: 0,
+      hasCompletedPreAssessment: false,
+      preAssessmentScore: null,
+      hasCompletedPostAssessment: false,
+      postAssessmentScore: null,
+      canTakePostAssessment: false,
     };
   }
 
   try {
-    const totalLessonsRes = await db.select({ count: sql<number>`count(*)` }).from(lessons).where(eq(lessons.status, "published"));
-    const completedLessonsRes = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(userProgress)
-      .where(and(eq(userProgress.userId, userId), eq(userProgress.status, "completed")));
-
-    const total = Number(totalLessonsRes[0]?.count || 4);
-    const completed = Number(completedLessonsRes[0]?.count || 0);
-    const percentage = Math.min(100, Math.round((completed / total) * 100));
+    const status = await getUserAssessmentStatus(userId);
+    const totalLessons = 7;
+    const completedCount = status.completedLessonsCount;
+    const progressPercentage = Math.min(100, Math.round((completedCount / totalLessons) * 100));
 
     const scoreRes = await db.select().from(awarenessScores).where(eq(awarenessScores.userId, userId)).limit(1);
     const score = scoreRes[0] || { currentScore: 0, initialScore: 0, improvementDelta: 0 };
 
     return {
-      completedCount: completed,
-      totalLessons: total,
-      progressPercentage: percentage,
+      completedCount,
+      totalLessons: 7,
+      completedLessonsCount: status.completedLessonsCount,
+      passedQuizzesCount: status.passedQuizzesCount,
+      totalQuizzes: 7,
+      passedScenariosCount: status.passedScenariosCount,
+      totalScenarios: 7,
+      progressPercentage,
       currentAwarenessScore: score.currentScore,
       initialAwarenessScore: score.initialScore,
       improvementDelta: score.improvementDelta,
+      hasCompletedPreAssessment: status.hasCompletedPreAssessment,
+      preAssessmentScore: status.preAssessmentScore,
+      hasCompletedPostAssessment: status.hasCompletedPostAssessment,
+      postAssessmentScore: status.postAssessmentScore,
+      canTakePostAssessment: status.canTakePostAssessment,
     };
-  } catch {
+  } catch (err) {
+    console.warn("[LearningService] getUserLearningOverview fallback:", err);
     return {
-      completedCount: 2,
-      totalLessons: 8,
-      progressPercentage: 25,
-      currentAwarenessScore: 65,
-      initialAwarenessScore: 40,
-      improvementDelta: 25,
+      completedCount: 0,
+      totalLessons: 7,
+      completedLessonsCount: 0,
+      passedQuizzesCount: 0,
+      totalQuizzes: 7,
+      passedScenariosCount: 0,
+      totalScenarios: 7,
+      progressPercentage: 0,
+      currentAwarenessScore: 0,
+      initialAwarenessScore: 0,
+      improvementDelta: 0,
+      hasCompletedPreAssessment: false,
+      preAssessmentScore: null,
+      hasCompletedPostAssessment: false,
+      postAssessmentScore: null,
+      canTakePostAssessment: false,
     };
   }
 }
