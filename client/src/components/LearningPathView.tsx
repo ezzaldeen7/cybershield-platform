@@ -36,6 +36,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { LessonScenarioModal } from "./LessonScenarioModal";
 
 interface LearningPathViewProps {
   onOpenAuth?: () => void;
@@ -47,6 +48,10 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [activeLessonModal, setActiveLessonModal] = useState<any | null>(null);
   const [activeQuizLesson, setActiveQuizLesson] = useState<any | null>(null);
+  const [activeScenarioLesson, setActiveScenarioLesson] = useState<any | null>(null);
+
+  // 7 Real Lessons with Scenarios (Lesson 5 is deleted/excluded)
+  const LESSONS_WITH_SCENARIOS = [1, 2, 3, 4, 6, 7, 8];
 
   // Queries & Mutations
   const categoriesQuery = trpc.content.categories.useQuery();
@@ -55,6 +60,12 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
   );
   const quizProgressQuery = trpc.quiz.getProgress.useQuery();
   const quizProgress = quizProgressQuery.data || [];
+
+  const scenarioProgressQuery = trpc.scenario.getProgress.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const scenarioProgress = scenarioProgressQuery.data || [];
+
   const utils = trpc.useUtils();
 
   const completeMutation = trpc.learning.completeLesson.useMutation({
@@ -100,6 +111,11 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
       return;
     }
     setActiveQuizLesson(lesson);
+  };
+
+  const handleOpenScenario = (lesson: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setActiveScenarioLesson(lesson);
   };
 
   const handleCompleteLesson = (lessonId: number, e?: React.MouseEvent) => {
@@ -338,8 +354,36 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
                     );
                   })()}
 
+                  {/* Scenario Status Badge (for 7 real lessons with scenarios) */}
+                  {LESSONS_WITH_SCENARIOS.includes(lesson.id) && (() => {
+                    const scProgress = scenarioProgress.find((s) => s.lessonId === lesson.id);
+                    return (
+                      <div className="mb-4 flex items-center justify-between rounded-lg bg-black/25 px-3 py-2 text-xs border border-white/5">
+                        <span className="text-[11px] text-slate-300 flex items-center gap-1.5 font-medium">
+                          <ShieldAlert size={13} className="text-amber-400" />
+                          المحاكاة التفاعلية:
+                        </span>
+                        {scProgress?.passed ? (
+                          <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px] py-0.5 gap-1">
+                            <CheckCircle2 size={11} />
+                            تم الاجتياز ({scProgress.bestScore}%)
+                          </Badge>
+                        ) : scProgress && scProgress.attemptsCount > 0 ? (
+                          <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-[10px] py-0.5 gap-1">
+                            <AlertCircle size={11} />
+                            إعادة مطلوبة ({scProgress.bestScore}%)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-white/10 text-slate-400 text-[10px] py-0.5">
+                            متاح الآن
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -361,6 +405,18 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
                         <ClipboardCheck size={13} />
                         اختبار الدرس
                       </Button>
+
+                      {LESSONS_WITH_SCENARIOS.includes(lesson.id) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => handleOpenScenario(lesson, e)}
+                          className="h-8 text-xs border-amber-400/30 text-amber-300 hover:bg-amber-400/10 font-semibold gap-1 px-2.5"
+                        >
+                          <ShieldAlert size={13} />
+                          محاكاة تفاعلية
+                        </Button>
+                      )}
                     </div>
 
                     {!isCompleted ? (
@@ -497,6 +553,22 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
                     اختبار هذا الدرس
                   </Button>
 
+                  {LESSONS_WITH_SCENARIOS.includes(activeLessonModal.id) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const target = activeLessonModal;
+                        setActiveLessonModal(null);
+                        handleOpenScenario(target);
+                      }}
+                      className="border-amber-400/40 text-amber-300 hover:bg-amber-400/15 text-xs font-semibold gap-1.5"
+                    >
+                      <ShieldAlert size={14} />
+                      محاكاة تفاعلية
+                    </Button>
+                  )}
+
                   {!activeLessonModal.isCompleted && (
                     <Button
                       size="sm"
@@ -521,6 +593,18 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
         isOpen={!!activeQuizLesson}
         onClose={() => setActiveQuizLesson(null)}
         onOpenAuth={onOpenAuth}
+      />
+
+      {/* 7. Lesson Scenario Interactive Dialog / Modal */}
+      <LessonScenarioModal
+        lesson={activeScenarioLesson}
+        isOpen={!!activeScenarioLesson}
+        onClose={() => setActiveScenarioLesson(null)}
+        onOpenAuth={onOpenAuth}
+        onOpenLesson={(target) => {
+          const found = lessons.find((l: any) => l.id === target.id);
+          if (found) setActiveLessonModal(found);
+        }}
       />
     </div>
   );

@@ -100,6 +100,10 @@ export async function seedDatabase() {
   const { seedInitialQuizzes } = await import("./services/quizService");
   await seedInitialQuizzes();
 
+  // 5. Interactive Cybersecurity Scenarios
+  const { seedInitialScenarios } = await import("./services/scenarioService");
+  await seedInitialScenarios();
+
   console.log("[Seed] Database seeding completed successfully!");
 }
 
