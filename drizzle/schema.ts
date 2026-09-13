@@ -109,6 +109,8 @@ export const quizzes = sqliteTable("quizzes", {
   titleAr: text("titleAr").notNull(),
   titleEn: text("titleEn"),
   passScorePercentage: integer("passScorePercentage").default(70).notNull(),
+  status: text("status").default("draft").notNull(),
+  createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
   createdAt: integer("createdAt", { mode: "timestamp" }).default(sql`(cast(unixepoch() as integer))`).notNull(),
 });
 

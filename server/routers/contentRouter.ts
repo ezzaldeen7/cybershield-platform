@@ -7,6 +7,7 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  OFFICIAL_LESSON_IDS,
 } from "../services/contentService";
 import { TRPCError } from "@trpc/server";
 import { getClientIp } from "../_core/middleware";
@@ -33,10 +34,12 @@ export const contentRouter = router({
         search: z.string().optional(),
         page: z.number().optional(),
         limit: z.number().optional(),
+        mineOnly: z.boolean().optional(),
       })
     )
     .query(async ({ input, ctx }) => {
       const userRole = ctx.user?.role;
+      const authorId = input.mineOnly && ctx.user ? ctx.user.id : undefined;
       return await listLessons({
         userRole,
         categoryId: input.categoryId,
@@ -45,6 +48,7 @@ export const contentRouter = router({
         search: input.search,
         page: input.page,
         limit: input.limit,
+        authorId,
       });
     }),
 
@@ -85,6 +89,7 @@ export const contentRouter = router({
         difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
         durationMinutes: z.number().optional(),
         status: z.enum(["draft", "published", "archived"]).optional(),
+        order: z.number().optional(),
         learningObjectives: z.array(z.string()).optional(),
         tags: z.array(z.string()).optional(),
       })
@@ -129,11 +134,36 @@ export const contentRouter = router({
         difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
         durationMinutes: z.number().optional(),
         status: z.enum(["draft", "published", "archived"]).optional(),
+        order: z.number().optional(),
         learningObjectives: z.array(z.string()).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+
+      const lesson = await getLessonByIdOrSlug(id, ctx.user.role);
+      if (!lesson) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "الدرس غير موجود" });
+      }
+
+      const isOfficial = (OFFICIAL_LESSON_IDS as readonly number[]).includes(id) || lesson.createdBy === null;
+
+      if (ctx.user.role !== "admin") {
+        if (isOfficial) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "لا يمكن للمدرس تعديل الدروس الرسمية المعتمدة للمنظومة",
+          });
+        }
+
+        if (lesson.createdBy !== ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "غير مصرح لك بتعديل هذا الدرس؛ يمكنك تعديل دروسك الخاصة فقط",
+          });
+        }
+      }
+
       const updated = await updateLesson(id, data);
 
       const db = await getDb();
@@ -158,6 +188,29 @@ export const contentRouter = router({
   archive: instructorProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
+      const lesson = await getLessonByIdOrSlug(input.id, ctx.user.role);
+      if (!lesson) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "الدرس غير موجود" });
+      }
+
+      const isOfficial = (OFFICIAL_LESSON_IDS as readonly number[]).includes(input.id) || lesson.createdBy === null;
+
+      if (ctx.user.role !== "admin") {
+        if (isOfficial) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "لا يمكن للمدرس أرشفة الدروس الرسمية المعتمدة للمنظومة",
+          });
+        }
+
+        if (lesson.createdBy !== ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "غير مصرح لك بأرشفة هذا الدرس؛ يمكنك أرشفة دروسك الخاصة فقط",
+          });
+        }
+      }
+
       const success = await deleteLesson(input.id);
       if (!success) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "تعذر أرشفة الدرس" });
@@ -169,6 +222,56 @@ export const contentRouter = router({
           userId: ctx.user.id,
           action: "ARCHIVE_LESSON",
           eventType: "CMS_ARCHIVE",
+          severity: "warning",
+          detailsJson: JSON.stringify({ lessonId: input.id }),
+          ipAddress: getClientIp(ctx.req),
+          userAgent: (ctx.req.headers["user-agent"] as string) || "Unknown",
+        });
+      }
+
+      return { success: true };
+    }),
+
+  /**
+   * Delete lesson alias for archive (Instructor & Admin only)
+   */
+  delete: instructorProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const lesson = await getLessonByIdOrSlug(input.id, ctx.user.role);
+      if (!lesson) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "الدرس غير موجود" });
+      }
+
+      const isOfficial = (OFFICIAL_LESSON_IDS as readonly number[]).includes(input.id) || lesson.createdBy === null;
+
+      if (ctx.user.role !== "admin") {
+        if (isOfficial) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "لا يمكن للمدرس حذف أو أرشفة الدروس الرسمية المعتمدة للمنظومة",
+          });
+        }
+
+        if (lesson.createdBy !== ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "غير مصرح لك بحذف هذا الدرس؛ يمكنك حذف دروسك الخاصة فقط",
+          });
+        }
+      }
+
+      const success = await deleteLesson(input.id);
+      if (!success) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "تعذر حذف/أرشفة الدرس" });
+      }
+
+      const db = await getDb();
+      if (db) {
+        await db.insert(auditLogs).values({
+          userId: ctx.user.id,
+          action: "DELETE_LESSON",
+          eventType: "CMS_DELETE",
           severity: "warning",
           detailsJson: JSON.stringify({ lessonId: input.id }),
           ipAddress: getClientIp(ctx.req),

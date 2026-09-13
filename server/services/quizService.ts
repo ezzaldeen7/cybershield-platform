@@ -122,6 +122,8 @@ export async function seedInitialQuizzes() {
           titleAr: qz.titleAr,
           titleEn: qz.titleEn,
           passScorePercentage: qz.passScorePercentage,
+          status: "published",
+          createdBy: null,
         });
       } else if (actualLessonId && existing[0].lessonId !== actualLessonId) {
         await db.update(quizzes).set({ lessonId: actualLessonId }).where(eq(quizzes.id, qz.id));
@@ -152,7 +154,7 @@ export async function seedInitialQuizzes() {
 /**
  * Get quiz details by lessonId or quizId
  */
-export async function getQuizByLessonOrId(params: { lessonId?: number; quizId?: number }) {
+export async function getQuizByLessonOrId(params: { lessonId?: number; quizId?: number; userRole?: string }) {
   const db = await getDb();
   await seedInitialQuizzes();
 
@@ -182,6 +184,10 @@ export async function getQuizByLessonOrId(params: { lessonId?: number; quizId?: 
 
   if (!targetQuiz) {
     throw new Error("الاختبار المطلوب غير موجود في النظام");
+  }
+
+  if (targetQuiz.status && targetQuiz.status !== "published" && params.userRole !== "instructor" && params.userRole !== "admin") {
+    throw new Error("الاختبار غير متاح حالياً؛ ما زال قيد الإعداد أو تمت أرشفته");
   }
 
   return targetQuiz;
@@ -271,6 +277,11 @@ export async function submitQuizAnswers(params: {
   const { userId, quizId, answers } = params;
   const db = await getDb();
   await seedInitialQuizzes();
+
+  const quiz = await getQuizByLessonOrId({ quizId });
+  if (quiz.status && quiz.status !== "published") {
+    throw new Error("لا يمكن تقديم هذا الاختبار لأنه ما زال مسودة أو تمت أرشفته");
+  }
 
   const questions = await getQuizQuestionsList(quizId, false);
   if (questions.length === 0) {
@@ -420,4 +431,296 @@ export async function getUserQuizzesProgress(userId?: number) {
   }
 
   return progressList;
+}
+
+/**
+ * Official Quizzes that cannot be modified/deleted by instructors
+ */
+export const OFFICIAL_QUIZ_IDS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+export async function listQuizzes(params: {
+  userRole?: string;
+  userId?: number;
+  mineOnly?: boolean;
+  status?: string;
+  search?: string;
+}) {
+  const db = await getDb();
+  await seedInitialQuizzes();
+  if (!db) return [];
+
+  const conditions: any[] = [];
+
+  if (params.userRole !== "instructor" && params.userRole !== "admin") {
+    conditions.push(eq(quizzes.status, "published"));
+  } else if (params.status) {
+    conditions.push(eq(quizzes.status, params.status));
+  }
+
+  if (params.mineOnly && params.userId) {
+    conditions.push(eq(quizzes.createdBy, params.userId));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const quizRows = await db.select().from(quizzes).where(whereClause).orderBy(desc(quizzes.id));
+
+  // Get question counts and lesson titles
+  const allLessons = await db.select().from(lessons);
+  const lessonMap = new Map(allLessons.map((l) => [l.id, l.titleAr]));
+
+  const allQuestions = await db.select().from(quizQuestions);
+  const questionCountMap = new Map<number, number>();
+  for (const q of allQuestions) {
+    questionCountMap.set(q.quizId, (questionCountMap.get(q.quizId) || 0) + 1);
+  }
+
+  return quizRows.map((q) => ({
+    ...q,
+    lessonTitleAr: q.lessonId ? lessonMap.get(q.lessonId) || null : null,
+    questionsCount: questionCountMap.get(q.id) || 0,
+  }));
+}
+
+export async function getQuizWithQuestionsForInstructor(quizId: number, userRole: string, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, quizId)).limit(1);
+  if (!quiz) throw new Error("الاختبار غير موجود");
+
+  const isOfficial = (OFFICIAL_QUIZ_IDS as readonly number[]).includes(quizId) || quiz.createdBy === null;
+  if (userRole !== "admin") {
+    if (isOfficial) {
+      throw new Error("لا يمكن للمدرس تعديل أو فحص الاختبارات الرسمية المعتمدة");
+    }
+    if (quiz.createdBy !== userId) {
+      throw new Error("غير مصرح لك بإدارة هذا الاختبار");
+    }
+  }
+
+  const questions = await db.select().from(quizQuestions).where(eq(quizQuestions.quizId, quizId)).orderBy(quizQuestions.order);
+  const parsedQuestions = questions.map((q) => {
+    let options: string[] = [];
+    try {
+      options = JSON.parse(q.optionsJson);
+    } catch {
+      options = [];
+    }
+    return {
+      ...q,
+      options,
+    };
+  });
+
+  return {
+    quiz,
+    questions: parsedQuestions,
+  };
+}
+
+export async function createQuiz(params: {
+  titleAr: string;
+  titleEn?: string;
+  lessonId?: number;
+  passScorePercentage?: number;
+  status?: "draft" | "published";
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [created] = await db
+    .insert(quizzes)
+    .values({
+      titleAr: params.titleAr.trim(),
+      titleEn: params.titleEn?.trim() || null,
+      lessonId: params.lessonId || null,
+      passScorePercentage: params.passScorePercentage || 70,
+      status: params.status || "draft",
+      createdBy: params.createdBy,
+    })
+    .returning();
+
+  return created;
+}
+
+export async function updateQuiz(
+  id: number,
+  params: {
+    titleAr?: string;
+    titleEn?: string;
+    lessonId?: number;
+    passScorePercentage?: number;
+    status?: "draft" | "published" | "archived";
+  },
+  userRole: string,
+  userId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, id)).limit(1);
+  if (!quiz) throw new Error("الاختبار غير موجود");
+
+  const isOfficial = (OFFICIAL_QUIZ_IDS as readonly number[]).includes(id) || quiz.createdBy === null;
+  if (userRole !== "admin") {
+    if (isOfficial) {
+      throw new Error("لا يمكن للمدرس تعديل الاختبارات الرسمية المعتمدة");
+    }
+    if (quiz.createdBy !== userId) {
+      throw new Error("غير مصرح لك بتعديل هذا الاختبار");
+    }
+  }
+
+  const updateSet: Record<string, any> = {};
+  if (params.titleAr !== undefined) updateSet.titleAr = params.titleAr.trim();
+  if (params.titleEn !== undefined) updateSet.titleEn = params.titleEn?.trim() || null;
+  if (params.lessonId !== undefined) updateSet.lessonId = params.lessonId;
+  if (params.passScorePercentage !== undefined) updateSet.passScorePercentage = params.passScorePercentage;
+  if (params.status !== undefined) updateSet.status = params.status;
+
+  await db.update(quizzes).set(updateSet).where(eq(quizzes.id, id));
+
+  const [updated] = await db.select().from(quizzes).where(eq(quizzes.id, id)).limit(1);
+  return updated;
+}
+
+export async function archiveQuiz(id: number, userRole: string, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, id)).limit(1);
+  if (!quiz) throw new Error("الاختبار غير موجود");
+
+  const isOfficial = (OFFICIAL_QUIZ_IDS as readonly number[]).includes(id) || quiz.createdBy === null;
+  if (userRole !== "admin") {
+    if (isOfficial) {
+      throw new Error("لا يمكن للمدرس أرشفة أو حذف الاختبارات الرسمية المعتمدة");
+    }
+    if (quiz.createdBy !== userId) {
+      throw new Error("غير مصرح لك بأرشفة هذا الاختبار");
+    }
+  }
+
+  await db.update(quizzes).set({ status: "archived" }).where(eq(quizzes.id, id));
+  return true;
+}
+
+export async function addQuizQuestion(
+  params: {
+    quizId: number;
+    questionAr: string;
+    questionEn?: string;
+    options: string[];
+    correctOptionIndex: number;
+    explanationAr: string;
+    difficulty?: string;
+    order?: number;
+  },
+  userRole: string,
+  userId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, params.quizId)).limit(1);
+  if (!quiz) throw new Error("الاختبار غير موجود");
+
+  const isOfficial = (OFFICIAL_QUIZ_IDS as readonly number[]).includes(params.quizId) || quiz.createdBy === null;
+  if (userRole !== "admin") {
+    if (isOfficial) {
+      throw new Error("لا يمكن للمدرس إضافة أسئلة للاختبارات الرسمية المعتمدة");
+    }
+    if (quiz.createdBy !== userId) {
+      throw new Error("غير مصرح لك بإضافة أسئلة لهذا الاختبار");
+    }
+  }
+
+  const [question] = await db
+    .insert(quizQuestions)
+    .values({
+      quizId: params.quizId,
+      questionAr: params.questionAr.trim(),
+      questionEn: params.questionEn?.trim() || null,
+      optionsJson: JSON.stringify(params.options),
+      correctOptionIndex: params.correctOptionIndex,
+      explanationAr: params.explanationAr.trim(),
+      difficulty: params.difficulty || "medium",
+      order: params.order ?? 1,
+    })
+    .returning();
+
+  return question;
+}
+
+export async function updateQuizQuestion(
+  params: {
+    questionId: number;
+    questionAr?: string;
+    questionEn?: string;
+    options?: string[];
+    correctOptionIndex?: number;
+    explanationAr?: string;
+    difficulty?: string;
+    order?: number;
+  },
+  userRole: string,
+  userId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [question] = await db.select().from(quizQuestions).where(eq(quizQuestions.id, params.questionId)).limit(1);
+  if (!question) throw new Error("السؤال غير موجود");
+
+  const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, question.quizId)).limit(1);
+  if (!quiz) throw new Error("الاختبار غير موجود");
+
+  const isOfficial = (OFFICIAL_QUIZ_IDS as readonly number[]).includes(quiz.id) || quiz.createdBy === null;
+  if (userRole !== "admin") {
+    if (isOfficial) {
+      throw new Error("لا يمكن للمدرس تعديل أسئلة الاختبارات الرسمية المعتمدة");
+    }
+    if (quiz.createdBy !== userId) {
+      throw new Error("غير مصرح لك بتعديل أسئلة هذا الاختبار");
+    }
+  }
+
+  const updateSet: Record<string, any> = {};
+  if (params.questionAr !== undefined) updateSet.questionAr = params.questionAr.trim();
+  if (params.questionEn !== undefined) updateSet.questionEn = params.questionEn?.trim() || null;
+  if (params.options !== undefined) updateSet.optionsJson = JSON.stringify(params.options);
+  if (params.correctOptionIndex !== undefined) updateSet.correctOptionIndex = params.correctOptionIndex;
+  if (params.explanationAr !== undefined) updateSet.explanationAr = params.explanationAr.trim();
+  if (params.difficulty !== undefined) updateSet.difficulty = params.difficulty;
+  if (params.order !== undefined) updateSet.order = params.order;
+
+  await db.update(quizQuestions).set(updateSet).where(eq(quizQuestions.id, params.questionId));
+
+  const [updated] = await db.select().from(quizQuestions).where(eq(quizQuestions.id, params.questionId)).limit(1);
+  return updated;
+}
+
+export async function deleteQuizQuestion(questionId: number, userRole: string, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("قاعدة البيانات غير متاحة");
+
+  const [question] = await db.select().from(quizQuestions).where(eq(quizQuestions.id, questionId)).limit(1);
+  if (!question) throw new Error("السؤال غير موجود");
+
+  const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, question.quizId)).limit(1);
+  if (!quiz) throw new Error("الاختبار غير موجود");
+
+  const isOfficial = (OFFICIAL_QUIZ_IDS as readonly number[]).includes(quiz.id) || quiz.createdBy === null;
+  if (userRole !== "admin") {
+    if (isOfficial) {
+      throw new Error("لا يمكن للمدرس حذف أسئلة الاختبارات الرسمية المعتمدة");
+    }
+    if (quiz.createdBy !== userId) {
+      throw new Error("غير مصرح لك بحذف أسئلة هذا الاختبار");
+    }
+  }
+
+  await db.delete(quizQuestions).where(eq(quizQuestions.id, questionId));
+  return true;
 }

@@ -27,6 +27,7 @@ export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | nu
       _sqlite = new Database(dbUrl);
       _sqlite.pragma("journal_mode = WAL");
       _sqlite.pragma("foreign_keys = ON");
+      ensureQuizColumns(_sqlite);
       _db = drizzle(_sqlite, { schema });
     } catch (error) {
       console.warn("[Database] Failed to connect to SQLite:", error);
@@ -34,6 +35,15 @@ export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | nu
     }
   }
   return _db;
+}
+
+function ensureQuizColumns(sqlite: Database.Database) {
+  try {
+    sqlite.exec("ALTER TABLE quizzes ADD COLUMN status TEXT DEFAULT 'published'");
+  } catch {}
+  try {
+    sqlite.exec("ALTER TABLE quizzes ADD COLUMN createdBy INTEGER REFERENCES users(id)");
+  } catch {}
 }
 
 /**
@@ -51,6 +61,7 @@ export function getDbSync(): BetterSQLite3Database<typeof schema> | null {
       _sqlite = new Database(dbUrl);
       _sqlite.pragma("journal_mode = WAL");
       _sqlite.pragma("foreign_keys = ON");
+      ensureQuizColumns(_sqlite);
       _db = drizzle(_sqlite, { schema });
     } catch (error) {
       console.warn("[Database] Failed to connect to SQLite (sync):", error);

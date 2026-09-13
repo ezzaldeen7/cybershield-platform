@@ -6,6 +6,7 @@ import { AssessmentModal } from "@/components/AssessmentModal";
 import { LearningPathView } from "@/components/LearningPathView";
 import { QuizzesHubView } from "@/components/QuizzesHubView";
 import { AdminDashboardView } from "@/components/AdminDashboardView";
+import { InstructorDashboardView } from "@/components/InstructorDashboardView";
 import { WeaknessRecommendationsView } from "@/components/WeaknessRecommendationsView";
 import { toast } from "sonner";
 import {
@@ -18,6 +19,7 @@ import {
   ChevronLeft,
   CircleHelp,
   ClipboardCheck,
+  GraduationCap,
   Clock3,
   EyeOff,
   FileWarning,
@@ -45,7 +47,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 
-type Section = "overview" | "analyzer" | "lessons" | "quiz" | "admin";
+type Section = "overview" | "analyzer" | "lessons" | "quiz" | "admin" | "instructor";
 type AnalyzerMode = "link" | "message";
 
 export default function Home() {
@@ -127,6 +129,7 @@ export default function Home() {
               />
             )}
             {active === "admin" && <AdminView />}
+            {active === "instructor" && <InstructorDashboardView />}
           </div>
         </main>
       </div>
@@ -152,6 +155,10 @@ function Sidebar({ active, setActive, onClose, userRole }: { active: Section; se
     { id: "lessons" as Section, label: "مسار التوعية", icon: BookOpen },
     { id: "quiz" as Section, label: "اختبر نفسك", icon: ClipboardCheck },
   ];
+
+  if (userRole === "instructor" || userRole === "admin") {
+    items.push({ id: "instructor" as Section, label: "لوحة المدرس", icon: GraduationCap });
+  }
 
   if (userRole === "admin") {
     items.push({ id: "admin" as Section, label: "لوحة الأدمن", icon: ShieldAlert });

@@ -287,6 +287,8 @@ export async function getCategories() {
 /**
  * List lessons with filtering, search, and pagination
  */
+export const OFFICIAL_LESSON_IDS = [1, 2, 3, 4, 6, 7, 8] as const;
+
 export async function listLessons(params: {
   userRole?: string;
   categoryId?: number;
@@ -295,6 +297,7 @@ export async function listLessons(params: {
   search?: string;
   page?: number;
   limit?: number;
+  authorId?: number;
 }) {
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(50, Math.max(1, params.limit || 10));
@@ -313,6 +316,9 @@ export async function listLessons(params: {
     }
     if (params.difficulty) {
       filtered = filtered.filter((l) => l.difficulty === params.difficulty);
+    }
+    if (params.authorId !== undefined) {
+      filtered = filtered.filter((l) => l.createdBy === params.authorId);
     }
     if (params.search && params.search.trim()) {
       const term = params.search.trim().toLowerCase();
@@ -333,6 +339,10 @@ export async function listLessons(params: {
       conditions.push(eq(lessons.status, "published"));
     } else if (params.status) {
       conditions.push(eq(lessons.status, params.status));
+    }
+
+    if (params.authorId !== undefined) {
+      conditions.push(eq(lessons.createdBy, params.authorId));
     }
 
     if (params.categoryId) {
@@ -435,6 +445,7 @@ export async function createLesson(params: {
   difficulty?: "beginner" | "intermediate" | "advanced";
   durationMinutes?: number;
   status?: "draft" | "published" | "archived";
+  order?: number;
   learningObjectives?: string[];
   tags?: string[];
   createdBy: number;
@@ -453,7 +464,8 @@ export async function createLesson(params: {
     categoryId: params.categoryId || null,
     difficulty: params.difficulty || "beginner",
     durationMinutes: params.durationMinutes || 5,
-    status: params.status || "published",
+    status: params.status || "draft",
+    order: params.order ?? 99,
     learningObjectivesJson: params.learningObjectives ? JSON.stringify(params.learningObjectives) : null,
     createdBy: params.createdBy,
   };
@@ -538,6 +550,7 @@ export async function updateLesson(
     difficulty: "beginner" | "intermediate" | "advanced";
     durationMinutes: number;
     status: "draft" | "published" | "archived";
+    order: number;
     learningObjectives: string[];
   }>
 ): Promise<Lesson> {
@@ -564,6 +577,7 @@ export async function updateLesson(
   if (params.difficulty !== undefined) updateSet.difficulty = params.difficulty;
   if (params.durationMinutes !== undefined) updateSet.durationMinutes = params.durationMinutes;
   if (params.status !== undefined) updateSet.status = params.status;
+  if (params.order !== undefined) updateSet.order = params.order;
   if (params.learningObjectives !== undefined) updateSet.learningObjectivesJson = JSON.stringify(params.learningObjectives);
 
   await db.update(lessons).set(updateSet).where(eq(lessons.id, id));

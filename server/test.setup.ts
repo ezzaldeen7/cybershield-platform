@@ -25,6 +25,14 @@ beforeAll(() => {
     }
   }
 
+  // Ensure quizzes has status and createdBy columns
+  try {
+    db.exec("ALTER TABLE quizzes ADD COLUMN status TEXT DEFAULT 'published'");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE quizzes ADD COLUMN createdBy INTEGER REFERENCES users(id)");
+  } catch {}
+
   // Ensure default test admin user exists in test database
   const adminCheck = db.prepare("SELECT count(*) as count FROM users WHERE email='admin@cybershield.sa'").get() as { count: number };
   if (adminCheck.count === 0) {
