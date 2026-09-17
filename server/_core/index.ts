@@ -57,6 +57,29 @@ async function startServer() {
     res.json({ status: "ok", service: "cybershield", timestamp: new Date().toISOString() });
   });
 
+  app.get("/api/test-db", async (_req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { lessons } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (!db) return res.json({ ok: false, error: "no db" });
+      const rows = await db.select().from(lessons).limit(3);
+      return res.json({ ok: true, count: rows.length, first: rows[0]?.titleAr });
+    } catch (e: any) {
+      return res.status(500).json({ ok: false, error: e?.message, stack: e?.stack });
+    }
+  });
+
+  app.get("/api/test-lessons", async (_req, res) => {
+    try {
+      const { getLessonsWithProgress } = await import("../services/learningService");
+      const data = await getLessonsWithProgress({});
+      return res.json({ ok: true, total: data.totalLessons, count: data.lessons.length });
+    } catch (e: any) {
+      return res.status(500).json({ ok: false, error: e?.message, stack: e?.stack });
+    }
+  });
+
   app.use('/api', rateLimitMiddleware);
   app.use(requestLoggingMiddleware);
   registerStorageProxy(app);
