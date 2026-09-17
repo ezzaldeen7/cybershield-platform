@@ -7,8 +7,63 @@ import { users, sessions, awarenessScores, auditLogs, securityEvents, User } fro
 export const SALT_ROUNDS = 12;
 export const SESSION_DURATION_DAYS = 30;
 
-// In-Memory Fallback Store when MySQL server or tables are unavailable
-const fallbackUsers = new Map<string, User>();
+// In-Memory Fallback Store when database is in degraded or isolated mode
+const fallbackUsers = new Map<string, User>([
+  [
+    "admin@cybershield.sa",
+    {
+      id: 2,
+      openId: "admin-cybershield",
+      email: "admin@cybershield.sa",
+      name: "مدير النظام (Admin)",
+      passwordHash: "$2b$12$DoeMuW63Qm6U16aJoSZktu29eIpj0af4bUcFyK2ICvQ4ObPc8GSq.",
+      loginMethod: "local",
+      role: "admin",
+      mustChangePassword: false,
+      isActive: true,
+      lastIpAddress: "127.0.0.1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    },
+  ],
+  [
+    "instructor@cybershield.sa",
+    {
+      id: 3,
+      openId: "instructor-cybershield",
+      email: "instructor@cybershield.sa",
+      name: "د. سارة الأحمد (محاضر)",
+      passwordHash: "$2b$12$BjbW2bhItmq3f32dgJWyAeoA7nZZLfLvxYPBXUj2.gdS2BMfDtMc.",
+      loginMethod: "local",
+      role: "instructor",
+      mustChangePassword: false,
+      isActive: true,
+      lastIpAddress: "127.0.0.1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    },
+  ],
+  [
+    "student@cybershield.sa",
+    {
+      id: 4,
+      openId: "student-cybershield",
+      email: "student@cybershield.sa",
+      name: "نورة القحطاني (طالبة)",
+      passwordHash: "$2b$12$GTkc/QltkIDyRqBr/qwIPewdOc0FP9HsAwgYpz7k7BykIKfo8tmgi",
+      loginMethod: "local",
+      role: "user",
+      mustChangePassword: false,
+      isActive: true,
+      lastIpAddress: "127.0.0.1",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+    },
+  ],
+]);
 const fallbackSessions = new Map<string, { userId: number; expiresAt: Date }>();
 
 /**
