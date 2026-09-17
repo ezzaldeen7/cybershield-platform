@@ -37,6 +37,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { LessonScenarioModal } from "./LessonScenarioModal";
+import { STATIC_FALLBACK_LESSONS } from "@/data/staticLessons";
 
 interface LearningPathViewProps {
   onOpenAuth?: () => void;
@@ -93,14 +94,20 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
     ? categoriesQuery.data
     : DEFAULT_FALLBACK_CATEGORIES;
 
-  const lessonsData = lessonsQuery.data || {
-    lessons: [],
-    totalLessons: 7,
-    completedCount: 0,
-    progressPercentage: 0,
-  };
+  // Seamless Fallback: Ensure 7 official lessons always render immediately
+  const serverLessons = lessonsQuery.data?.lessons;
+  const baseLessons = (serverLessons && serverLessons.length > 0)
+    ? serverLessons
+    : STATIC_FALLBACK_LESSONS;
 
-  const { lessons, totalLessons, completedCount, progressPercentage } = lessonsData;
+  // Filter lessons by category if active
+  const lessons = selectedCategory !== null
+    ? baseLessons.filter((l: any) => l.categoryId === selectedCategory)
+    : baseLessons;
+
+  const totalLessons = STATIC_FALLBACK_LESSONS.length;
+  const completedCount = lessonsQuery.data?.completedCount ?? lessons.filter((l: any) => l.isCompleted).length;
+  const progressPercentage = lessonsQuery.data?.progressPercentage ?? (totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0);
 
   const handleOpenLesson = (lesson: any) => {
     setActiveLessonModal(lesson);
