@@ -32,9 +32,10 @@ export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | nu
 
       _sqlite = new Database(dbUrl);
       try {
-        _sqlite.pragma("journal_mode = WAL");
+        _sqlite.pragma("journal_mode = DELETE");
+        _sqlite.pragma("synchronous = NORMAL");
       } catch (e) {
-        console.warn("[Database] WAL pragma failed:", e);
+        console.warn("[Database] pragma failed:", e);
       }
       try {
         _sqlite.pragma("foreign_keys = ON");
@@ -78,7 +79,8 @@ export function getDbSync(): BetterSQLite3Database<typeof schema> | null {
 
       _sqlite = new Database(dbUrl);
       try {
-        _sqlite.pragma("journal_mode = WAL");
+        _sqlite.pragma("journal_mode = DELETE");
+        _sqlite.pragma("synchronous = NORMAL");
       } catch {}
       try {
         _sqlite.pragma("foreign_keys = ON");
