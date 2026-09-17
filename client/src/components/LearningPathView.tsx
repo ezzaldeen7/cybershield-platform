@@ -269,30 +269,7 @@ export function LearningPathView({ onOpenAuth, onNavigateToQuiz }: LearningPathV
       </div>
 
       {/* 4. Lessons Grid */}
-      {lessonsQuery.isLoading ? (
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
-            <Card key={i} className="animate-pulse border-white/10 bg-[#101a2d] p-6 h-64" />
-          ))}
-        </div>
-      ) : lessonsQuery.isError ? (
-        <Card className="border-red-500/20 bg-red-500/5 p-8 text-center space-y-4">
-          <div className="flex flex-col items-center justify-center gap-2">
-            <AlertCircle className="h-8 w-8 text-red-400" />
-            <p className="text-sm font-semibold text-red-300">تعذر تحميل قائمة الدروس التعليمية حالياً.</p>
-            <p className="text-xs text-slate-400">قد يكون هناك انقطاع مؤقت في الاتصال بالخادم.</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => lessonsQuery.refetch()}
-            className="border-red-500/30 text-red-300 hover:bg-red-500/10 gap-2"
-          >
-            <RotateCcw size={14} />
-            إعادة المحاولة
-          </Button>
-        </Card>
-      ) : lessons.length === 0 ? (
+      {lessons.length === 0 ? (
         <Card className="border-white/10 bg-[#101a2d] p-10 text-center space-y-4">
           <p className="text-sm text-slate-400">لا توجد دروس مطابقة للتصنيف المحدد حالياً.</p>
           {selectedCategory !== null && (

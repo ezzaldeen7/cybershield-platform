@@ -7,8 +7,29 @@ import { ENV } from "./_core/env";
 import fs from "fs";
 import path from "path";
 
+import { execFileSync } from "child_process";
+
 let _sqlite: Database.Database | null = null;
 let _db: BetterSQLite3Database<typeof schema> | null = null;
+let _sqliteChecked = false;
+let _sqliteAvailable = false;
+
+function canLoadSqlite(): boolean {
+  if (_sqliteChecked) return _sqliteAvailable;
+  _sqliteChecked = true;
+  try {
+    execFileSync(
+      process.execPath,
+      ["-e", "const b = require('better-sqlite3'); new b(':memory:');"],
+      { stdio: "ignore", timeout: 3000 }
+    );
+    _sqliteAvailable = true;
+  } catch {
+    console.warn("[Database] Native better-sqlite3 is unavailable or crashing in this environment, using static data store.");
+    _sqliteAvailable = false;
+  }
+  return _sqliteAvailable;
+}
 
 /**
  * Returns the SQLite Drizzle database instance.
@@ -16,6 +37,9 @@ let _db: BetterSQLite3Database<typeof schema> | null = null;
  */
 export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | null> {
   if (!_db) {
+    if (!canLoadSqlite()) {
+      return null;
+    }
     try {
       let dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
       // If DATABASE_URL is set to a postgres URL on cloud platforms, ignore it and use sqlite
