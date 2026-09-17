@@ -57,6 +57,47 @@ async function startServer() {
     res.json({ status: "ok", service: "cybershield", timestamp: new Date().toISOString() });
   });
 
+  app.get("/api/test-native", (_req, res) => {
+    res.json({ ok: true, versions: process.versions, cwd: process.cwd() });
+  });
+
+  app.get("/api/test-file", async (_req, res) => {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const p = path.resolve("./data/cybershield.db");
+      const exists = fs.existsSync(p);
+      let stat = null;
+      if (exists) {
+        stat = fs.statSync(p);
+      }
+      res.json({ ok: true, path: p, exists, size: stat?.size, mode: stat?.mode });
+    } catch (e: any) {
+      res.json({ ok: false, error: e?.message });
+    }
+  });
+
+  app.get("/api/test-import", async (_req, res) => {
+    try {
+      const b = await import("better-sqlite3");
+      res.json({ ok: true, type: typeof b.default });
+    } catch (e: any) {
+      res.json({ ok: false, error: e?.message, stack: e?.stack });
+    }
+  });
+
+  app.get("/api/test-open", async (_req, res) => {
+    try {
+      const b = await import("better-sqlite3");
+      const Database = b.default;
+      const memDb = new Database(":memory:");
+      memDb.prepare("CREATE TABLE test (id INT)").run();
+      res.json({ ok: true, memoryDb: "works" });
+    } catch (e: any) {
+      res.json({ ok: false, error: e?.message, stack: e?.stack });
+    }
+  });
+
   app.get("/api/test-db", async (_req, res) => {
     try {
       const { getDb } = await import("../db");
