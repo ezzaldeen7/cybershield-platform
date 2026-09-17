@@ -31,7 +31,7 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
   // CSP - Content Security Policy
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: http: https:;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: http: https:;"
   );
 
   // X-Frame-Options - Prevent clickjacking
@@ -249,9 +249,9 @@ export const helmetConfig = {
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", 'data:', 'https:'],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", 'data:', "https://fonts.gstatic.com"],
     },
   },
   hsts: {

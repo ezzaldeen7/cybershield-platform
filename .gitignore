@@ -102,17 +102,19 @@ tmp/
 temp/
 
 # Database
-data/
-*.db
-*.db-journal
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
+data/*.test.db*
+data/cybercrime.db
+*.test.db*
+!data/cybershield.db
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
-.project-config.json
+# Temporary and scratch files
+extracted_doc_text.txt
+CyberShield_Project_Full.zip
