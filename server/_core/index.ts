@@ -34,6 +34,14 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+process.on("uncaughtException", (err) => {
+  console.error("[Process] Uncaught Exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled Rejection:", reason);
+});
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -43,6 +51,12 @@ async function startServer() {
   // Security controls
   app.use(securityHeadersMiddleware);
   app.use(corsMiddleware);
+
+  // Health check endpoint for cloud hosting providers (Render, etc.)
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", service: "cybershield", timestamp: new Date().toISOString() });
+  });
+
   app.use('/api', rateLimitMiddleware);
   app.use(requestLoggingMiddleware);
   registerStorageProxy(app);
@@ -53,6 +67,9 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      onError({ error, path }) {
+        console.error(`[tRPC Error] on path '${path}':`, error);
+      },
     })
   );
   // development mode uses Vite, production mode uses static files
@@ -62,11 +79,12 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  // Direct port listening in production, fallback to findAvailablePort in local dev
+  let port: number;
+  if (process.env.PORT) {
+    port = parseInt(process.env.PORT, 10);
+  } else {
+    port = await findAvailablePort(3000);
   }
 
   server.listen(port, "0.0.0.0", () => {
@@ -74,4 +92,6 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => {
+  console.error("[Server] Fatal error on start:", err);
+});

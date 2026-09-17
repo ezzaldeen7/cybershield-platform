@@ -254,6 +254,7 @@ export async function seedInitialLessons(adminUserId?: number): Promise<void> {
             summaryAr: item.summaryAr,
             content: item.content,
             contentAr: item.contentAr,
+            categoryId: item.categoryId,
             difficulty: item.difficulty,
             durationMinutes: item.durationMinutes,
             learningObjectivesJson: item.learningObjectivesJson,

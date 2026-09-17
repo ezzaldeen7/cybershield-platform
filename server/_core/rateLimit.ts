@@ -101,10 +101,10 @@ export const RATE_LIMIT_CONFIG = {
     maxRequests: 5,
   } as RateLimitConfig,
 
-  // API calls: 100 per hour
+  // API calls: 5000 per hour
   API: {
     windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 100,
+    maxRequests: 5000,
   } as RateLimitConfig,
 
   // Quiz attempts: 10 per minute

@@ -17,7 +17,13 @@ let _db: BetterSQLite3Database<typeof schema> | null = null;
 export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | null> {
   if (!_db) {
     try {
-      const dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
+      let dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
+      // If DATABASE_URL is set to a postgres URL on cloud platforms, ignore it and use sqlite
+      if (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) {
+        console.warn("[Database] Postgres URL detected in DATABASE_URL, falling back to local SQLite file.");
+        dbUrl = "./data/cybershield.db";
+      }
+
       // Ensure directory exists
       const dbDir = path.dirname(path.resolve(dbUrl));
       if (!fs.existsSync(dbDir)) {
@@ -25,8 +31,16 @@ export async function getDb(): Promise<BetterSQLite3Database<typeof schema> | nu
       }
 
       _sqlite = new Database(dbUrl);
-      _sqlite.pragma("journal_mode = WAL");
-      _sqlite.pragma("foreign_keys = ON");
+      try {
+        _sqlite.pragma("journal_mode = WAL");
+      } catch (e) {
+        console.warn("[Database] WAL pragma failed:", e);
+      }
+      try {
+        _sqlite.pragma("foreign_keys = ON");
+      } catch (e) {
+        console.warn("[Database] foreign_keys pragma failed:", e);
+      }
       ensureQuizColumns(_sqlite);
       _db = drizzle(_sqlite, { schema });
     } catch (error) {
@@ -52,15 +66,23 @@ function ensureQuizColumns(sqlite: Database.Database) {
 export function getDbSync(): BetterSQLite3Database<typeof schema> | null {
   if (!_db) {
     try {
-      const dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
+      let dbUrl = process.env.DATABASE_URL || "./data/cybershield.db";
+      if (dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://")) {
+        console.warn("[Database] Postgres URL detected in DATABASE_URL, falling back to local SQLite file.");
+        dbUrl = "./data/cybershield.db";
+      }
       const dbDir = path.dirname(path.resolve(dbUrl));
       if (!fs.existsSync(dbDir)) {
         fs.mkdirSync(dbDir, { recursive: true });
       }
 
       _sqlite = new Database(dbUrl);
-      _sqlite.pragma("journal_mode = WAL");
-      _sqlite.pragma("foreign_keys = ON");
+      try {
+        _sqlite.pragma("journal_mode = WAL");
+      } catch {}
+      try {
+        _sqlite.pragma("foreign_keys = ON");
+      } catch {}
       ensureQuizColumns(_sqlite);
       _db = drizzle(_sqlite, { schema });
     } catch (error) {
